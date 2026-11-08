@@ -62,6 +62,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -139,6 +140,7 @@ fun HomeScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val floatingBanner by viewModel.floatingBanner.collectAsState()
+    val undoableDeletion by viewModel.undoableDeletion.collectAsState()
 
     val context = LocalContext.current
     val taskListState = rememberLazyListState()
@@ -771,7 +773,7 @@ fun HomeScreen(
                         // while a swipe is under way: always-on item animations made the list flicker when the
                         // keyboard opened or a task was added.
                         SwipeToDeleteBox(
-                            onDelete = { viewModel.deleteTask(task.id) },
+                            onDelete = { viewModel.deleteTaskWithUndo(task.id) },
                             onSwipeActiveChanged = { active -> swipeInProgress = active },
                             modifier = if (animateRowPlacement) {
                                 Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
@@ -854,6 +856,43 @@ fun HomeScreen(
                 },
                 modifier = Modifier.fillMaxSize()
             )
+        }
+
+        // "Task deleted - Undo" bar after a swipe-to-delete, above the speed dial button
+        AnimatedVisibility(
+            visible = undoableDeletion != null,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 90.dp, start = 20.dp, end = 20.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = SurfaceCardLight,
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.6f)),
+                shadowElevation = 8.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = highlightNotificationKeywords("Task deleted"),
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(
+                        onClick = { viewModel.undoDeleteTask() },
+                        modifier = Modifier.testTag("undo_delete_button")
+                    ) {
+                        Text("UNDO", color = NeonPink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    }
+                }
+            }
         }
 
         // Floating notification banner overlay (high z-order, does not displace content)

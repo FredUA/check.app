@@ -30,6 +30,9 @@ private const val TAG = "TaskFlowViewModel"
 // A list not seen before counts as "just created" if it was created within this long (server time).
 private const val NEW_LIST_WINDOW_MS = 120_000L
 
+// How long "Undo" is offered after a task is deleted by swiping.
+private const val UNDO_WINDOW_MS = 6_000L
+
 // How long list deletions are held back, to tell "project deleted" from "lists deleted one by one".
 private const val LIST_DELETION_SETTLE_MS = 2_000L
 
@@ -655,6 +658,44 @@ class TaskFlowViewModel(
                 Log.e(TAG, "Failed to delete task", e)
             }
         }
+    }
+
+    // Undo for swipe-to-delete: the deleted task stays here for a few seconds so it can be put back.
+    private val _undoableDeletion = MutableStateFlow<TaskItem?>(null)
+    val undoableDeletion: StateFlow<TaskItem?> = _undoableDeletion.asStateFlow()
+    private var undoExpiryJob: kotlinx.coroutines.Job? = null
+
+    /** Deletes the task and offers to undo it for a few seconds. */
+    fun deleteTaskWithUndo(taskId: String) {
+        val target = allTasks.value.firstOrNull { it.id == taskId }
+            ?: sharedTasks.value.firstOrNull { it.id == taskId }
+        deleteTask(taskId)
+        // (Demo mode keeps its data in memory and has nothing to restore from.)
+        if (target == null || com.example.demo.DemoMode.isDemoActive.value) return
+        _undoableDeletion.value = target
+        undoExpiryJob?.cancel()
+        undoExpiryJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(UNDO_WINDOW_MS)
+            _undoableDeletion.value = null
+        }
+    }
+
+    fun undoDeleteTask() {
+        val task = _undoableDeletion.value ?: return
+        undoExpiryJob?.cancel()
+        _undoableDeletion.value = null
+        viewModelScope.launch {
+            try {
+                repository.restoreTask(task)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restore task", e)
+            }
+        }
+    }
+
+    fun dismissUndo() {
+        undoExpiryJob?.cancel()
+        _undoableDeletion.value = null
     }
 
     // Sharing
