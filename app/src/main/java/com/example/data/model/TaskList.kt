@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.Exclude
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
@@ -15,9 +16,15 @@ data class TaskList(
     val title: String = "",
     val colorHex: String = "#00D2FF",
     val memberEmails: List<String> = emptyList(),
+    val lastUpdatedBy: String = "",
     val tasks: Map<String, Any?> = emptyMap(),
     @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    @ServerTimestamp val updatedAt: Timestamp? = null,
+    // Firestore snapshot metadata, filled in by the repository (never stored in the database).
+    // hasPendingWrites: this snapshot includes a change made on this device that the server hasn't confirmed.
+    // fromCache: the snapshot came from the local cache and may be stale.
+    @get:Exclude val hasPendingWrites: Boolean = false,
+    @get:Exclude val fromCache: Boolean = false
 ) {
     val displayTitle: String get() = name.ifBlank { title }
 

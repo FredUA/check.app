@@ -15,6 +15,8 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.MetadataChanges
+import com.google.firebase.firestore.QuerySnapshot
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -323,24 +325,33 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
 
     // --- Task Lists (Subcollection: /projects/{projectId}/lists/{listId}) ---
 
+    private fun listsFromSnapshot(snapshot: QuerySnapshot, projectId: String): List<TaskList> =
+        snapshot.documents.mapNotNull { doc ->
+            doc.toObject(TaskList::class.java)?.copy(
+                id = doc.id,
+                projectId = projectId,
+                name = doc.getString("name") ?: doc.getString("title").orEmpty(),
+                title = doc.getString("name") ?: doc.getString("title").orEmpty(),
+                hasPendingWrites = doc.metadata.hasPendingWrites(),
+                fromCache = doc.metadata.isFromCache
+            )
+        }
+
+    /**
+     * @param includeMetadata also emit when only Firestore metadata changes (e.g. cache -> server
+     * confirmation, local write acknowledged). Used by the change watcher; the data is the same,
+     * so UI code should keep the default.
+     */
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observeLists(projectId: String?): Flow<List<TaskList>> {
+    fun observeLists(projectId: String?, includeMetadata: Boolean = false): Flow<List<TaskList>> {
         if (DemoMode.isDemoActive.value) {
             return DemoMode.observeLists(projectId)
         }
+        val metadataChanges = if (includeMetadata) MetadataChanges.INCLUDE else MetadataChanges.EXCLUDE
         if (!projectId.isNullOrBlank()) {
             return db.collection("projects").document(projectId).collection("lists")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.documents.mapNotNull { doc ->
-                        doc.toObject(TaskList::class.java)?.copy(
-                            id = doc.id,
-                            projectId = projectId,
-                            name = doc.getString("name") ?: doc.getString("title").orEmpty(),
-                            title = doc.getString("name") ?: doc.getString("title").orEmpty()
-                        )
-                    }
-                }
+                .snapshots(metadataChanges)
+                .map { snapshot -> listsFromSnapshot(snapshot, projectId) }
                 .catch { e ->
                     Log.e("TaskFlowRepository", "observeLists failed for project $projectId", e)
                     emit(emptyList())
@@ -352,17 +363,8 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             } else {
                 combine(projects.map { project ->
                     db.collection("projects").document(project.id).collection("lists")
-                        .snapshots()
-                        .map { snapshot ->
-                            snapshot.documents.mapNotNull { doc ->
-                                doc.toObject(TaskList::class.java)?.copy(
-                                    id = doc.id,
-                                    projectId = project.id,
-                                    name = doc.getString("name") ?: doc.getString("title").orEmpty(),
-                                    title = doc.getString("name") ?: doc.getString("title").orEmpty()
-                                )
-                            }
-                        }
+                        .snapshots(metadataChanges)
+                        .map { snapshot -> listsFromSnapshot(snapshot, project.id) }
                         .catch { e ->
                             Log.e("TaskFlowRepository", "observeLists failed for project ${project.id}", e)
                             emit(emptyList())
@@ -507,6 +509,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         try {
             listRef.update(
                 "tasks.$taskId", taskData,
+                "lastUpdatedBy", currentEmail,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
             return taskId
@@ -533,6 +536,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.subtasks", task.subtasks,
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -556,6 +560,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.completedAt" to if (nextCompleted) Timestamp.now() else null,
                 "tasks.${task.id}.lastUpdatedBy" to currentUserEmail(),
                 "tasks.${task.id}.updatedAt" to Timestamp.now(),
+                "lastUpdatedBy" to currentUserEmail(),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             listRef.update(updates).await()
@@ -585,6 +590,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.subtasks", updatedSubtasks,
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -614,6 +620,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.subtasks", updatedSubtasks,
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -636,6 +643,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.subtasks", updatedSubtasks,
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -668,7 +676,11 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             // Remove from source list
             val oldListRef = db.collection("projects").document(task.projectId).collection("lists").document(task.listId)
             try {
-                oldListRef.update("tasks.${task.id}", FieldValue.delete()).await()
+                oldListRef.update(
+                    "tasks.${task.id}", FieldValue.delete(),
+                    "lastUpdatedBy", currentUserEmail(),
+                    "updatedAt", FieldValue.serverTimestamp()
+                ).await()
             } catch (_: Exception) {}
 
             // Add to target list
@@ -676,6 +688,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             val newListRef = db.collection("projects").document(targetProjectId).collection("lists").document(targetListId)
             newListRef.update(
                 "tasks.${task.id}", updatedTask.toMap(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -696,6 +709,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         try {
             listRef.update(
                 "tasks.$taskId", FieldValue.delete(),
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {

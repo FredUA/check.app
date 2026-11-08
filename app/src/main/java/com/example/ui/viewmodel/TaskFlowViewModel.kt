@@ -26,7 +26,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val TAG = "TaskFlowViewModel"
-private const val LOCAL_CHANGE_WINDOW_MS = 15_000L
 
 enum class SortOption(val displayName: String) {
     DATE_NEWEST("Newest first"),
@@ -113,10 +112,15 @@ class TaskFlowViewModel(
 
     // --- Notifications for changes made on other devices / by collaborators ---
 
-    // Completion changes this device made itself: taskId -> (expected isCompleted, mark time).
-    // They already post their own notification, so the snapshot diff below must skip them.
-    private val localCompletionChanges = mutableMapOf<String, Pair<Boolean, Long>>()
-    private var previousTaskStates: Map<String, TaskItem>? = null
+    // Previous snapshot of all lists and the tasks in them (null until the first snapshot arrives).
+    private var previousLists: Map<String, TaskList>? = null
+    private var previousTasks: Map<String, TaskInList>? = null
+
+    private class TaskInList(val task: TaskItem, val listId: String)
+
+    private enum class TaskChangeKind { ADDED, EDITED, DELETED, COMPLETED, REOPENED }
+
+    private class TaskChange(val kind: TaskChangeKind, val task: TaskItem, val byEmail: String)
 
     // Fired when a task was marked completed by another device / collaborator, so the UI can play the sound.
     private val _remoteTaskCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -133,55 +137,91 @@ class TaskFlowViewModel(
     // Ids of projects shared with me as of the previous snapshot (null until the first one arrives).
     private var knownSharedWithMeIds: Set<String>? = null
 
-    private fun markLocalCompletionChange(taskId: String, expectedCompleted: Boolean) {
-        localCompletionChanges[taskId] = expectedCompleted to System.currentTimeMillis()
-    }
+    /**
+     * Whether a difference found in [list] is worth telling the user about: it must come from
+     * someone else, not from this device (pending writes) or from a stale cache catching up with
+     * the server, the list must already have been known, and its project must be shared.
+     */
+    private fun isRemoteChange(list: TaskList, previousList: TaskList?): Boolean =
+        previousList != null &&
+            !list.hasPendingWrites &&
+            !previousList.fromCache &&
+            list.projectId in sharedProjectIds
 
-    private fun consumeLocalCompletionChange(taskId: String, nowCompleted: Boolean): Boolean {
-        val (expected, markedAt) = localCompletionChanges[taskId] ?: return false
-        val fresh = System.currentTimeMillis() - markedAt < LOCAL_CHANGE_WINDOW_MS
-        if (fresh && expected == nowCompleted) {
-            localCompletionChanges.remove(taskId)
-            return true
+    /** Compares the new snapshot of all lists with the previous one and announces others' task changes. */
+    private fun announceRemoteTaskChanges(lists: List<TaskList>) {
+        val currentLists = lists.associateBy { it.id }
+        val currentTasks = HashMap<String, TaskInList>()
+        for (list in lists) {
+            for (task in list.parseTasks()) currentTasks[task.id] = TaskInList(task, list.id)
         }
-        if (!fresh) localCompletionChanges.remove(taskId)
-        return false
-    }
+        val prevLists = previousLists
+        val prevTasks = previousTasks
+        previousLists = currentLists
+        previousTasks = currentTasks
+        // First snapshot is only the baseline. Demo mode edits are all local.
+        if (prevLists == null || prevTasks == null) return
+        if (com.example.demo.DemoMode.isDemoActive.value) return
 
-    private fun announceRemoteCompletionChanges(tasks: List<TaskItem>) {
-        val current = tasks.associateBy { it.id }
-        val previous = previousTaskStates
-        previousTaskStates = current
-        // First snapshot is only the baseline.
-        if (previous == null) return
-        val remoteChanges = mutableListOf<TaskItem>()
-        for ((id, task) in current) {
-            val before = previous[id] ?: continue
-            if (before.isCompleted == task.isCompleted) continue
-            if (consumeLocalCompletionChange(id, task.isCompleted)) continue
-            // Not shared with anyone: nothing to tell the user about.
-            if (task.projectId !in sharedProjectIds) continue
-            remoteChanges.add(task)
+        val changes = mutableListOf<TaskChange>()
+
+        for ((id, now) in currentTasks) {
+            val list = currentLists[now.listId] ?: continue
+            if (!isRemoteChange(list, prevLists[list.id])) continue
+            val by = now.task.lastUpdatedBy.ifBlank { list.lastUpdatedBy }
+            val before = prevTasks[id]
+            if (before == null) {
+                changes.add(TaskChange(TaskChangeKind.ADDED, now.task, by))
+            } else if (before.listId == now.listId) {
+                // (A task that moved to another list is ignored here.)
+                if (before.task.isCompleted != now.task.isCompleted) {
+                    val kind = if (now.task.isCompleted) TaskChangeKind.COMPLETED else TaskChangeKind.REOPENED
+                    changes.add(TaskChange(kind, now.task, by))
+                }
+                if (before.task.title.trim() != now.task.title.trim() ||
+                    before.task.notes.trim() != now.task.notes.trim()
+                ) {
+                    changes.add(TaskChange(TaskChangeKind.EDITED, now.task, by))
+                }
+            }
         }
-        if (remoteChanges.isEmpty()) return
+
+        for ((id, before) in prevTasks) {
+            if (id in currentTasks) continue
+            // If the list itself is gone (deleted, or access removed) this isn't a task deletion.
+            val list = currentLists[before.listId] ?: continue
+            if (!isRemoteChange(list, prevLists[list.id])) continue
+            // The deleted task can't say who deleted it; the list records the last editor.
+            changes.add(TaskChange(TaskChangeKind.DELETED, before.task, list.lastUpdatedBy))
+        }
+
+        if (changes.isEmpty()) return
         // One sound per update, even if several tasks changed at once; only for completion, not reopen.
-        if (remoteChanges.any { it.isCompleted }) _remoteTaskCompleted.tryEmit(Unit)
+        if (changes.any { it.kind == TaskChangeKind.COMPLETED }) _remoteTaskCompleted.tryEmit(Unit)
         viewModelScope.launch {
-            for (task in remoteChanges) {
-                val who = if (task.lastUpdatedBy.isBlank()) "Someone"
-                else repository.resolveDisplayName(task.lastUpdatedBy)
-                postNotification(
-                    if (task.isCompleted) "✓ $who completed: '${task.title}'"
-                    else "$who reopened: '${task.title}'"
-                )
-                _remoteEvents.emit(
-                    RemoteEvent(
-                        key = "task:${task.id}",
-                        trayTitle = if (task.isCompleted) "Task completed" else "Task reopened",
-                        trayText = if (task.isCompleted) "$who completed '${task.title}'"
-                        else "$who reopened '${task.title}'"
+            for (change in changes) {
+                val who = if (change.byEmail.isBlank()) "Someone"
+                else repository.resolveDisplayName(change.byEmail)
+                val title = change.task.title
+                val (banner, trayTitle, trayText) = when (change.kind) {
+                    TaskChangeKind.COMPLETED -> Triple(
+                        "✓ $who completed: '$title'", "Task completed", "$who completed '$title'"
                     )
-                )
+                    TaskChangeKind.REOPENED -> Triple(
+                        "$who reopened: '$title'", "Task reopened", "$who reopened '$title'"
+                    )
+                    TaskChangeKind.ADDED -> Triple(
+                        "$who added task: '$title'", "Task added", "$who added '$title'"
+                    )
+                    TaskChangeKind.EDITED -> Triple(
+                        "$who edited task: '$title'", "Task edited", "$who edited '$title'"
+                    )
+                    TaskChangeKind.DELETED -> Triple(
+                        "$who deleted task: '$title'", "Task deleted", "$who deleted '$title'"
+                    )
+                }
+                postNotification(banner)
+                _remoteEvents.emit(RemoteEvent(key = "task:${change.task.id}", trayTitle = trayTitle, trayText = trayText))
             }
         }
     }
@@ -226,10 +266,11 @@ class TaskFlowViewModel(
                 Log.e(TAG, "Shared project watcher stopped", e)
             }
         }
-        // Task completed / reopened elsewhere
+        // Tasks added / edited / completed / deleted elsewhere. Uses its own cold flow with snapshot
+        // metadata so the first real snapshot is the baseline and local writes can be told apart.
         viewModelScope.launch {
             try {
-                allTasks.collect { announceRemoteCompletionChanges(it) }
+                repository.observeLists(null, includeMetadata = true).collect { announceRemoteTaskChanges(it) }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -369,10 +410,6 @@ class TaskFlowViewModel(
 
     fun updateTask(task: TaskItem) {
         viewModelScope.launch {
-            val existing = allTasks.value.firstOrNull { it.id == task.id }
-            if (existing != null && existing.isCompleted != task.isCompleted) {
-                markLocalCompletionChange(task.id, task.isCompleted)
-            }
             try {
                 repository.updateTask(task)
             } catch (e: Exception) {
@@ -383,8 +420,6 @@ class TaskFlowViewModel(
 
     fun toggleTaskCompletion(task: TaskItem) {
         viewModelScope.launch {
-            // Mark before writing: Firestore delivers the local snapshot before the write completes.
-            markLocalCompletionChange(task.id, !task.isCompleted)
             try {
                 val nowCompleted = repository.toggleTaskCompletion(task)
                 val currentEmail = repository.currentUserEmail()
@@ -397,7 +432,6 @@ class TaskFlowViewModel(
                 }
                 postNotificationIfShared(msg, task.projectId)
             } catch (e: Exception) {
-                localCompletionChanges.remove(task.id)
                 Log.e(TAG, "Failed to toggle task completion", e)
             }
         }
