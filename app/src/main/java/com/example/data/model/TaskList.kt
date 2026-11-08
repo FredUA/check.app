@@ -1,13 +1,14 @@
 package com.example.data.model
 
 import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
 @IgnoreExtraProperties
 data class TaskList(
-    @DocumentId val id: String = "",
+    // No @DocumentId here: list documents store their own "id" field, and Firestore
+    // throws when @DocumentId collides with a stored field. The repository sets id from doc.id.
+    val id: String = "",
     val projectId: String = "",
     val ownerId: String = "",
     val name: String = "",

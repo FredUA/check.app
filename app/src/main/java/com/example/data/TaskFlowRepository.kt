@@ -308,7 +308,10 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                         )
                     }
                 }
-                .catch { emit(emptyList()) }
+                .catch { e ->
+                    Log.e("TaskFlowRepository", "observeLists failed for project $projectId", e)
+                    emit(emptyList())
+                }
         }
         return observeAccessibleProjects().flatMapLatest { projects ->
             if (projects.isEmpty()) {
@@ -327,7 +330,10 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                                 )
                             }
                         }
-                        .catch { emit(emptyList()) }
+                        .catch { e ->
+                            Log.e("TaskFlowRepository", "observeLists failed for project ${project.id}", e)
+                            emit(emptyList())
+                        }
                 }) { listsArray ->
                     listsArray.flatMap { it }
                 }
