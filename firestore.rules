@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isMemberOrOwner(data) {
+      return isSignedIn() && (
+        data.ownerId == request.auth.uid ||
+        (request.auth.token.email != null && ('memberEmails' in data) && request.auth.token.email in data.memberEmails) ||
+        (('memberIds' in data) && (request.auth.uid in data.memberIds || (request.auth.token.email != null && request.auth.token.email in data.memberIds))) ||
+        (('sharedWith' in data) && request.auth.uid in data.sharedWith)
+      );
+    }
+
+    // --- Validation Functions ---
+    function isValidUser(data) {
+      return data.keys().hasAll(['email']) &&
+        data.email is string &&
+        (!('displayName' in data) || data.displayName is string) &&
+        (!('firstName' in data) || data.firstName is string) &&
+        (!('lastName' in data) || data.lastName is string) &&
+        (!('avatarUrl' in data) || data.avatarUrl is string);
+    }
+
+    function isValidProject(data) {
+      return data.keys().hasAll(['ownerId']) &&
+        data.ownerId is string &&
+        ((!('title' in data) || data.title is string) && (!('name' in data) || data.name is string)) &&
+        (!('description' in data) || data.description is string) &&
+        (!('colorHex' in data) || data.colorHex is string) &&
+        (!('memberEmails' in data) || data.memberEmails is list) &&
+        (!('memberIds' in data) || data.memberIds is list) &&
+        (!('sharedWith' in data) || data.sharedWith is list) &&
+        (!('ownerEmail' in data) || data.ownerEmail is string);
+    }
+
+    function isValidList(data) {
+      return data.keys().hasAll(['projectId', 'ownerId']) &&
+        data.projectId is string &&
+        data.ownerId is string &&
+        ((!('title' in data) || data.title is string) && (!('name' in data) || data.name is string)) &&
+        (!('colorHex' in data) || data.colorHex is string) &&
+        (!('memberEmails' in data) || data.memberEmails is list) &&
+        (!('tasks' in data) || data.tasks is map);
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['listId', 'projectId', 'ownerId', 'title']) &&
+        data.listId is string &&
+        data.projectId is string &&
+        data.ownerId is string &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
+        (!('notes' in data) || data.notes is string) &&
+        (!('isCompleted' in data) || data.isCompleted is bool) &&
+        (!('completed' in data) || data.completed is bool) &&
+        (!('subtasks' in data) || data.subtasks is list) &&
+        (!('memberEmails' in data) || data.memberEmails is list) &&
+        (!('lastUpdatedBy' in data) || data.lastUpdatedBy is string);
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isUser(userId) && isValidUser(request.resource.data);
+      allow delete: if isUser(userId);
+    }
+
+    // --- Projects Collection ---
+    match /projects/{projectId} {
+      allow read: if isMemberOrOwner(resource.data);
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid && isValidProject(request.resource.data);
+      allow update: if isMemberOrOwner(resource.data) && isValidProject(request.resource.data);
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Subcollection: /projects/{projectId}/lists/{listId}
+      match /lists/{listId} {
+        allow read, write: if isSignedIn() && isMemberOrOwner(get(/databases/$(database)/documents/projects/$(projectId)).data);
+      }
+    }
+
+    // --- Root Lists Collection (backwards compatibility) ---
+    match /lists/{listId} {
+      allow read: if isMemberOrOwner(resource.data);
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        (request.auth.token.email != null && ('memberEmails' in request.resource.data) && request.auth.token.email in request.resource.data.memberEmails)
+      ) && isValidList(request.resource.data);
+      allow update: if isMemberOrOwner(resource.data) && isValidList(request.resource.data);
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.token.email != null && ('memberEmails' in resource.data) && request.auth.token.email in resource.data.memberEmails)
+      );
+    }
+
+    // --- Root Tasks Collection (backwards compatibility) ---
+    match /tasks/{taskId} {
+      allow read: if isMemberOrOwner(resource.data);
+      allow create: if isSignedIn() && (
+        request.resource.data.ownerId == request.auth.uid ||
+        (request.auth.token.email != null && ('memberEmails' in request.resource.data) && request.auth.token.email in request.resource.data.memberEmails)
+      ) && isValidTask(request.resource.data);
+      allow update: if isMemberOrOwner(resource.data) && isValidTask(request.resource.data);
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (request.auth.token.email != null && ('memberEmails' in resource.data) && request.auth.token.email in resource.data.memberEmails)
+      );
+    }
+  }
+}

@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "displayName": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Top-level project containing task lists",
+      "type": "object",
+      "properties": {
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "colorHex": { "type": "string" },
+        "memberEmails": { "type": "array" },
+        "sharedWith": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerId", "title"]
+    },
+    "TaskList": {
+      "title": "TaskList",
+      "description": "Task list within a project",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "colorHex": { "type": "string" },
+        "memberEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "ownerId", "title"]
+    },
+    "TaskItem": {
+      "title": "TaskItem",
+      "description": "Task item with subtasks and list assignment",
+      "type": "object",
+      "properties": {
+        "listId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "title": { "type": "string" },
+        "notes": { "type": "string" },
+        "isCompleted": { "type": "boolean" },
+        "completedAt": { "type": "string", "format": "date-time" },
+        "subtasks": { "type": "array" },
+        "memberEmails": { "type": "array" },
+        "lastUpdatedBy": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["listId", "projectId", "ownerId", "title"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles indexed by UID"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "User projects with sharing support"
+    },
+    "/lists/{listId}": {
+      "schema": "TaskList",
+      "description": "Lists belonging to projects"
+    },
+    "/tasks/{taskId}": {
+      "schema": "TaskItem",
+      "description": "Tasks with subtasks and completion status"
+    }
+  }
+}
