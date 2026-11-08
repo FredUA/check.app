@@ -93,6 +93,7 @@ import com.example.ui.components.AddProjectCard
 import com.example.ui.components.CategoryCard
 import com.example.ui.components.QuickAddTaskRowItem
 import com.example.ui.components.SpeedDialFab
+import com.example.ui.components.SwipeToDeleteBox
 import com.example.ui.components.TaskRowItem
 import com.example.ui.dialogs.CreateListDialog
 import com.example.ui.dialogs.CreateProjectDialog
@@ -752,18 +753,24 @@ fun HomeScreen(
                             NeonBlue
                         }
 
-                        TaskRowItem(
-                            task = task,
-                            accentColor = accentColor,
-                            onToggleCompleted = {
-                                if (!task.isCompleted) {
-                                    SoundEffectHelper.playTaskDone(context)
-                                }
-                                viewModel.toggleTaskCompletion(task)
-                            },
-                            onClick = { selectedTaskForDetail = task },
-                            onShare = null
-                        )
+                        // Swipe left or right to delete; the rows below slide up smoothly (animateItem).
+                        SwipeToDeleteBox(
+                            onDelete = { viewModel.deleteTask(task.id) },
+                            modifier = Modifier.animateItem()
+                        ) {
+                            TaskRowItem(
+                                task = task,
+                                accentColor = accentColor,
+                                onToggleCompleted = {
+                                    if (!task.isCompleted) {
+                                        SoundEffectHelper.playTaskDone(context)
+                                    }
+                                    viewModel.toggleTaskCompletion(task)
+                                },
+                                onClick = { selectedTaskForDetail = task },
+                                onShare = null
+                            )
+                        }
                     }
                 }
 
