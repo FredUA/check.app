@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8" standalone="no"?>
 <resources>
     <string name="firestore_database_id" translatable="false">(default)</string>
+    <!-- App Check reCAPTCHA site key for the check-app-lists Firebase project. Empty = App Check not installed in release builds. -->
     <string name="recaptcha_site_key" translatable="false"></string>
 </resources>
