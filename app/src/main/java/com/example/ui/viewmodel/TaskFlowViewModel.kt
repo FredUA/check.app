@@ -121,15 +121,23 @@ class TaskFlowViewModel(
         previousTaskStates = current
         // First snapshot is only the baseline.
         if (previous == null) return
+        val remoteChanges = mutableListOf<TaskItem>()
         for ((id, task) in current) {
             val before = previous[id] ?: continue
             if (before.isCompleted == task.isCompleted) continue
             if (consumeLocalCompletionChange(id, task.isCompleted)) continue
-            val who = task.lastUpdatedBy.ifBlank { "Someone" }
-            postNotification(
-                if (task.isCompleted) "✓ $who completed: '${task.title}'"
-                else "$who reopened: '${task.title}'"
-            )
+            remoteChanges.add(task)
+        }
+        if (remoteChanges.isEmpty()) return
+        viewModelScope.launch {
+            for (task in remoteChanges) {
+                val who = if (task.lastUpdatedBy.isBlank()) "Someone"
+                else repository.resolveDisplayName(task.lastUpdatedBy)
+                postNotification(
+                    if (task.isCompleted) "✓ $who completed: '${task.title}'"
+                    else "$who reopened: '${task.title}'"
+                )
+            }
         }
     }
 

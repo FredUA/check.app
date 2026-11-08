@@ -70,6 +70,39 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    private val displayNameCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * Name to show for a collaborator identified by email:
+     * first name, else last name, else the email itself.
+     */
+    suspend fun resolveDisplayName(email: String): String {
+        val key = email.trim().lowercase()
+        if (key.isBlank()) return email
+        if (DemoMode.isDemoActive.value) return key
+        displayNameCache[key]?.let { return it }
+        return try {
+            val profile = db.collection("users")
+                .whereEqualTo("email", key)
+                .limit(1)
+                .get()
+                .await()
+                .documents
+                .firstOrNull()
+                ?.toObject(UserProfile::class.java)
+            val name = profile?.firstName?.trim().orEmpty()
+                .ifBlank { profile?.lastName?.trim().orEmpty() }
+                .ifBlank { key }
+            displayNameCache[key] = name
+            name
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("TaskFlowRepository", "Could not resolve display name for $key", e)
+            key
+        }
+    }
+
     suspend fun saveUserProfile(profile: UserProfile) {
         if (DemoMode.isDemoActive.value) return
         val uid = requireUserId()
