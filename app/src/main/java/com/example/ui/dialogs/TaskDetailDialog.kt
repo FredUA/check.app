@@ -75,13 +75,31 @@ fun TaskDetailDialog(
     onDismiss: () -> Unit,
     onToggleCompleted: () -> Unit,
     onUpdateTask: (TaskItem) -> Unit,
-    onReassignList: (targetListId: String, targetProjectId: String) -> Unit,
+    // Receives the task including any unsaved title/notes edits, so moving it doesn't lose them.
+    onReassignList: (editedTask: TaskItem, targetListId: String, targetProjectId: String) -> Unit,
     onDeleteTask: () -> Unit,
     onShareTask: (() -> Unit)? = null,
     onUnshareTask: ((String) -> Unit)? = null
 ) {
-    var title by remember(task.title) { mutableStateOf(task.title) }
-    var notes by remember(task.notes) { mutableStateOf(task.notes) }
+    // Edits stay local while typing and are saved once, when the dialog closes (Done / back / outside tap).
+    // Keyed by id so a change arriving from another device doesn't wipe what is being typed.
+    var title by remember(task.id) { mutableStateOf(task.title) }
+    var notes by remember(task.id) { mutableStateOf(task.notes) }
+    val initialTitle = remember(task.id) { task.title }
+    val initialNotes = remember(task.id) { task.notes }
+
+    // Built from the live task, so completion toggled in the dialog isn't overwritten with a stale value.
+    // A blank title is not allowed and keeps the previous one.
+    fun editedTask(): TaskItem = task.copy(title = title.trim().ifBlank { initialTitle }, notes = notes)
+
+    fun hasEdits(): Boolean =
+        title.trim().ifBlank { initialTitle }.trim() != initialTitle.trim() ||
+            notes.trim() != initialNotes.trim()
+
+    val saveAndDismiss = {
+        if (hasEdits()) onUpdateTask(editedTask())
+        onDismiss()
+    }
 
     val currentList = allLists.firstOrNull { it.id == task.listId }
     val currentProject = allProjects.firstOrNull { it.id == task.projectId }
@@ -121,7 +139,7 @@ fun TaskDetailDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = saveAndDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
@@ -234,10 +252,7 @@ fun TaskDetailDialog(
                     Spacer(modifier = Modifier.width(12.dp))
                     OutlinedTextField(
                         value = title,
-                        onValueChange = {
-                            title = it
-                            onUpdateTask(task.copy(title = it))
-                        },
+                        onValueChange = { title = it },
                         label = { Text("Task Title") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
@@ -254,10 +269,7 @@ fun TaskDetailDialog(
                 // Notes / Description
                 OutlinedTextField(
                     value = notes,
-                    onValueChange = {
-                        notes = it
-                        onUpdateTask(task.copy(notes = it))
-                    },
+                    onValueChange = { notes = it },
                     label = { Text("Description & Notes (Optional)") },
                     minLines = 3,
                     maxLines = 5,
@@ -290,7 +302,7 @@ fun TaskDetailDialog(
                     }
 
                     Button(
-                        onClick = onDismiss,
+                        onClick = saveAndDismiss,
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp)
@@ -331,7 +343,7 @@ fun TaskDetailDialog(
             confirmButton = {
                 Button(
                     onClick = {
-                        onReassignList(target.id, target.projectId)
+                        onReassignList(editedTask(), target.id, target.projectId)
                         showReassignConfirmation = false
                         candidateReassignList = null
                     },

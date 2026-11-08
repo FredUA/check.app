@@ -910,7 +910,10 @@ fun HomeScreen(
     }
 
     if (selectedTaskForDetail != null) {
-        val task = selectedTaskForDetail!!
+        val selected = selectedTaskForDetail!!
+        // Always show the live state of the task (e.g. its completion circle after a tap),
+        // not the copy that was stored when the dialog was opened.
+        val task = allTasks.firstOrNull { it.id == selected.id } ?: selected
         TaskDetailDialog(
             task = task,
             allLists = combinedLists,
@@ -923,8 +926,8 @@ fun HomeScreen(
                 viewModel.toggleTaskCompletion(task)
             },
             onUpdateTask = { updated -> viewModel.updateTask(updated) },
-            onReassignList = { targetListId, targetProjId ->
-                viewModel.reassignTask(task, targetListId, targetProjId)
+            onReassignList = { editedTask, targetListId, targetProjId ->
+                viewModel.reassignTask(editedTask, targetListId, targetProjId)
                 selectedTaskForDetail = null
             },
             onDeleteTask = {
