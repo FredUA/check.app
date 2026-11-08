@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.glance.currentState
@@ -53,6 +54,7 @@ import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
 import com.example.MainActivity
 import com.example.R
+import com.example.ui.SoundEffectHelper
 
 /** Intent contract between the widget and [MainActivity]. */
 object WidgetIntents {
@@ -73,6 +75,7 @@ private val ListIdKey = ActionParameters.Key<String>("listId")
 private val TaskIdKey = ActionParameters.Key<String>("taskId")
 
 private val RefreshTickKey = longPreferencesKey("refresh_tick")
+private val LocalChangeTickKey = longPreferencesKey("local_change_tick")
 
 class CheckListWidget : GlanceAppWidget() {
 
@@ -82,11 +85,16 @@ class CheckListWidget : GlanceAppWidget() {
             // Glance keeps a widget's composition alive between updates and only recomposes it, so data
             // loaded before provideContent would stay stale. Loading inside, keyed on a tick that
             // refresh() bumps, reloads the data on every refresh.
-            val tick = currentState<Preferences>()[RefreshTickKey] ?: 0L
-            val state by produceState(initialValue = WidgetStateCache.get(widgetId), tick) {
+            val prefs = currentState<Preferences>()
+            val refreshTick = prefs[RefreshTickKey] ?: 0L
+            val localChangeTick = prefs[LocalChangeTickKey] ?: 0L
+            val loaded by produceState(initialValue = WidgetStateCache.get(widgetId), refreshTick) {
                 value = WidgetDataSource.loadState(context, widgetId)
                     .also { WidgetStateCache.put(widgetId, it) }
             }
+            // A local change (tapped task) edits the cached state and bumps localChangeTick: the widget
+            // redraws from the cache at once, without waiting for Firestore.
+            val state = remember(loaded, localChangeTick) { WidgetStateCache.get(widgetId) ?: loaded }
             WidgetContent(context, widgetId, state)
         }
     }
@@ -94,6 +102,12 @@ class CheckListWidget : GlanceAppWidget() {
     /** Reloads the data of one placed widget and redraws it. */
     suspend fun refresh(context: Context, glanceId: GlanceId) {
         updateAppWidgetState(context, glanceId) { it[RefreshTickKey] = System.currentTimeMillis() }
+        update(context, glanceId)
+    }
+
+    /** Redraws one widget from the cached state only (no loading), after the cache was edited locally. */
+    suspend fun showLocalChange(context: Context, glanceId: GlanceId) {
+        updateAppWidgetState(context, glanceId) { it[LocalChangeTickKey] = System.currentTimeMillis() }
         update(context, glanceId)
     }
 
@@ -115,13 +129,11 @@ class CheckListWidgetReceiver : GlanceAppWidgetReceiver() {
     override fun onUpdate(context: Context, appWidgetManager: AppWidgetManager, appWidgetIds: IntArray) {
         super.onUpdate(context, appWidgetManager, appWidgetIds)
         // The periodic system update must reload the data too, not just redraw.
-        val pending = goAsync()
+        // No goAsync() here: GlanceAppWidgetReceiver already holds the broadcast's PendingResult,
+        // and a second goAsync() returns null.
+        val appContext = context.applicationContext
         CoroutineScope(Dispatchers.Default).launch {
-            try {
-                CheckListWidget.refreshAll(context)
-            } finally {
-                pending.finish()
-            }
+            runCatching { CheckListWidget.refreshAll(appContext) }
         }
     }
 
@@ -136,8 +148,23 @@ class ToggleTaskAction : ActionCallback {
         val projectId = parameters[ProjectIdKey] ?: return
         val listId = parameters[ListIdKey] ?: return
         val taskId = parameters[TaskIdKey] ?: return
-        WidgetDataSource.toggleTask(context, projectId, listId, taskId)
-        CheckListWidget().refresh(context, glanceId)
+        val widget = CheckListWidget()
+        val widgetId = GlanceAppWidgetManager(context).getAppWidgetId(glanceId)
+
+        // 1. Show the change right away; the Firestore write and the reload below happen after.
+        val wasCompleted = WidgetStateCache.flipTask(widgetId, taskId)
+        if (wasCompleted != null) {
+            if (!wasCompleted) SoundEffectHelper.playTaskDone(context)
+            widget.showLocalChange(context, glanceId)
+        }
+
+        // 2. Write to Firestore.
+        val nowCompleted = WidgetDataSource.toggleTask(context, projectId, listId, taskId)
+        // The task wasn't in the cached state (so no sound yet): play it now if it just became done.
+        if (wasCompleted == null && nowCompleted == true) SoundEffectHelper.playTaskDone(context)
+
+        // 3. Reload the truth.
+        widget.refresh(context, glanceId)
     }
 }
 

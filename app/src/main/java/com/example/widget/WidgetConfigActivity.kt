@@ -24,9 +24,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.text.style.TextOverflow
+import com.example.ui.theme.SharedGray
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -77,21 +84,38 @@ class WidgetConfigActivity : ComponentActivity() {
                 var loading by remember { mutableStateOf(true) }
                 var signedIn by remember { mutableStateOf(true) }
                 var projects by remember { mutableStateOf<List<Project>>(emptyList()) }
+                var myUserId by remember { mutableStateOf("") }
+                // Owner's display name by email, filled in after the list is shown.
+                val ownerNames = remember { mutableStateMapOf<String, String>() }
 
                 LaunchedEffect(Unit) {
                     signedIn = WidgetDataSource.isSignedIn(this@WidgetConfigActivity)
                     if (signedIn) {
+                        myUserId = WidgetDataSource.currentUserId(this@WidgetConfigActivity)
+                        // My own projects first, then the ones shared with me; each group A-Z.
                         projects = WidgetDataSource.fetchProjects(this@WidgetConfigActivity)
                             .orEmpty()
-                            .sortedBy { it.displayTitle.lowercase() }
+                            .sortedWith(
+                                compareBy<Project> { it.ownerId != myUserId }
+                                    .thenBy { it.displayTitle.lowercase() }
+                            )
                     }
                     loading = false
+
+                    projects.filter { it.ownerId != myUserId && it.ownerEmail.isNotBlank() }
+                        .map { it.ownerEmail }
+                        .distinct()
+                        .forEach { email ->
+                            ownerNames[email] = WidgetDataSource.resolveOwnerName(this@WidgetConfigActivity, email)
+                        }
                 }
 
                 ConfigContent(
                     loading = loading,
                     signedIn = signedIn,
                     projects = projects,
+                    myUserId = myUserId,
+                    ownerNames = ownerNames,
                     onPick = ::onProjectPicked
                 )
             }
@@ -115,6 +139,8 @@ private fun ConfigContent(
     loading: Boolean,
     signedIn: Boolean,
     projects: List<Project>,
+    myUserId: String,
+    ownerNames: Map<String, String>,
     onPick: (Project) -> Unit
 ) {
     Column(
@@ -142,7 +168,15 @@ private fun ConfigContent(
             projects.isEmpty() -> CenteredNote("No projects yet. Create one in check.app first.")
             else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(projects, key = { it.id }) { project ->
-                    ProjectRow(project, onClick = { onPick(project) })
+                    val sharedWithMe = project.ownerId != myUserId
+                    ProjectRow(
+                        project = project,
+                        sharedWithMe = sharedWithMe,
+                        ownerName = if (sharedWithMe) {
+                            ownerNames[project.ownerEmail] ?: project.ownerEmail.substringBefore("@")
+                        } else null,
+                        onClick = { onPick(project) }
+                    )
                 }
             }
         }
@@ -157,8 +191,15 @@ private fun CenteredNote(text: String) {
 }
 
 @Composable
-private fun ProjectRow(project: Project, onClick: () -> Unit) {
-    val dot = runCatching { Color(AndroidColor.parseColor(project.colorHex)) }.getOrDefault(NeonPink)
+private fun ProjectRow(
+    project: Project,
+    sharedWithMe: Boolean,
+    ownerName: String?,
+    onClick: () -> Unit
+) {
+    // Projects somebody else shared with me are always gray, like everywhere else in the app.
+    val dot = if (sharedWithMe) SharedGray
+    else runCatching { Color(AndroidColor.parseColor(project.colorHex)) }.getOrDefault(NeonPink)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -174,7 +215,30 @@ private fun ProjectRow(project: Project, onClick: () -> Unit) {
             project.displayTitle.ifBlank { "Untitled project" },
             color = TextPrimary,
             fontSize = 16.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
         )
+        if (sharedWithMe) {
+            Spacer(Modifier.width(12.dp))
+            if (!ownerName.isNullOrBlank()) {
+                Text(
+                    ownerName,
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 130.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Icon(
+                imageVector = Icons.Default.People,
+                contentDescription = "Shared with you",
+                tint = TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }

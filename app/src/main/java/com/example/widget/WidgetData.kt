@@ -62,6 +62,26 @@ object WidgetStateCache {
     fun remove(widgetId: Int) {
         states.remove(widgetId)
     }
+
+    /**
+     * Flips a task's done state in the cached state so the widget can redraw at once, before
+     * Firestore has been written. Returns the task's previous done state, or null if the task
+     * isn't in the cached state.
+     */
+    fun flipTask(widgetId: Int, taskId: String): Boolean? {
+        var previous: Boolean? = null
+        states.computeIfPresent(widgetId) { _, state ->
+            if (state !is WidgetState.Ready) return@computeIfPresent state
+            val task = state.tasks.firstOrNull { it.id == taskId } ?: return@computeIfPresent state
+            previous = task.completed
+            state.copy(
+                tasks = state.tasks
+                    .map { if (it.id == taskId) it.copy(completed = !it.completed) else it }
+                    .sortedBy { it.completed } // stable: done tasks sink, the rest keep their order
+            )
+        }
+        return previous
+    }
 }
 
 /** Which project / list every placed widget shows. Kept per appWidgetId. */
@@ -215,16 +235,30 @@ object WidgetDataSource {
     }
 
     /** Flips the done state of a task. The write is queued by Firestore even if the server can't be reached. */
-    suspend fun toggleTask(context: Context, projectId: String, listId: String, taskId: String) {
-        val lists = fetchLists(context, projectId, waitForServer = false) ?: return
+    suspend fun toggleTask(context: Context, projectId: String, listId: String, taskId: String): Boolean? {
+        val lists = fetchLists(context, projectId, waitForServer = false) ?: return null
         val task = lists.firstOrNull { it.id == listId }
             ?.parseTasks()
             ?.firstOrNull { it.id == taskId }
-            ?: return
-        try {
+            ?: return null
+        return try {
+            // On timeout the write has still been queued, so the new state is the same.
             withTimeoutOrNull(WRITE_TIMEOUT_MS) { repository(context).toggleTaskCompletion(task) }
+                ?: !task.isCompleted
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to toggle task $taskId", e)
+            null
         }
+    }
+
+    /** Display name of a project owner, for the project picker. */
+    suspend fun resolveOwnerName(context: Context, email: String): String =
+        repository(context).resolveDisplayName(email)
+
+    fun currentUserId(context: Context): String {
+        ensureInit(context)
+        return Firebase.auth.currentUser?.uid.orEmpty()
     }
 }
