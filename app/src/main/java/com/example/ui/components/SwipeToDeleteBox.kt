@@ -30,16 +30,17 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.NeonPink
 import kotlinx.coroutines.delay
 import kotlin.math.abs
 
-// Soft red: the same color is used for the outline, the icon and the "Delete" word.
-private val DeleteRed = Color(0xFFD96C6C)
+// The app's own pink (same as the quick-add button and the Delete button in the task dialog),
+// used for the outline, the icon and the "Delete" word.
+private val DeleteRed = NeonPink
 
 // The card has to be dragged this far (fraction of its width) before it is deleted: 3/5.
 private const val DELETE_DISTANCE_FRACTION = 0.6f
