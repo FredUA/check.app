@@ -70,6 +70,12 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow create, update: if isUser(userId) && isValidUser(request.resource.data);
       allow delete: if isUser(userId);
+
+      // Push (FCM) tokens of this user's devices. Only the user writes them; the Cloud Function reads
+      // them with admin rights.
+      match /devices/{deviceId} {
+        allow read, write: if isUser(userId);
+      }
     }
 
     // --- Projects Collection ---

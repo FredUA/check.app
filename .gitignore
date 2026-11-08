@@ -15,3 +15,6 @@ debug.keystore
 *-debug.log
 *.jks
 *.keystore
+
+functions/node_modules/
+firebase-debug.log
