@@ -69,25 +69,11 @@ fun AuthScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             // Hero Icon
-            Box(
-                modifier = Modifier
-                    .size(110.dp)
-                    .shadow(24.dp, CircleShape, spotColor = NeonPink)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.radialGradient(
-                            listOf(Color(0xFF3B5598), SurfaceCard)
-                        )
-                    )
-                    .padding(8.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Image(
-                    painter = painterResource(id = R.drawable.ic_app_foreground_img),
-                    contentDescription = "check.app logo",
-                    modifier = Modifier.size(80.dp)
-                )
-            }
+            Image(
+                painter = painterResource(id = R.drawable.ic_check_logo),
+                contentDescription = "check.app logo",
+                modifier = Modifier.size(132.dp)
+            )
 
             Spacer(modifier = Modifier.height(28.dp))
 
