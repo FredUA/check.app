@@ -42,12 +42,14 @@ data class AppNotification(
     val timestamp: Long = System.currentTimeMillis()
 )
 
-/** A task completed or reopened by someone else (another device or a collaborator). */
-data class RemoteTaskUpdate(
-    val taskId: String,
-    val taskTitle: String,
-    val who: String,
-    val completed: Boolean
+/**
+ * Something changed in a shared project because of someone else (another device or a collaborator).
+ * [key] identifies the thing that changed, so a newer notification about it replaces the older one.
+ */
+data class RemoteEvent(
+    val key: String,
+    val trayTitle: String,
+    val trayText: String
 )
 
 class TaskFlowViewModel(
@@ -104,6 +106,11 @@ class TaskFlowViewModel(
         }
     }
 
+    /** Notifications about tasks/lists only make sense for projects shared with somebody. */
+    private fun postNotificationIfShared(message: String, vararg projectIds: String) {
+        if (projectIds.any { it in sharedProjectIds }) postNotification(message)
+    }
+
     // --- Notifications for changes made on other devices / by collaborators ---
 
     // Completion changes this device made itself: taskId -> (expected isCompleted, mark time).
@@ -115,9 +122,16 @@ class TaskFlowViewModel(
     private val _remoteTaskCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val remoteTaskCompleted: SharedFlow<Unit> = _remoteTaskCompleted.asSharedFlow()
 
-    // One event per remotely completed/reopened task, used for system tray notifications.
-    private val _remoteTaskUpdates = MutableSharedFlow<RemoteTaskUpdate>(extraBufferCapacity = 16)
-    val remoteTaskUpdates: SharedFlow<RemoteTaskUpdate> = _remoteTaskUpdates.asSharedFlow()
+    // One event per remote change in a shared project, used for system tray notifications.
+    private val _remoteEvents = MutableSharedFlow<RemoteEvent>(extraBufferCapacity = 16)
+    val remoteEvents: SharedFlow<RemoteEvent> = _remoteEvents.asSharedFlow()
+
+    // Only shared projects produce notifications: ones I own and shared with somebody,
+    // and ones somebody else shared with me. Updated by the watchers started in init.
+    private var sharedProjectIds: Set<String> = emptySet()
+
+    // Ids of projects shared with me as of the previous snapshot (null until the first one arrives).
+    private var knownSharedWithMeIds: Set<String>? = null
 
     private fun markLocalCompletionChange(taskId: String, expectedCompleted: Boolean) {
         localCompletionChanges[taskId] = expectedCompleted to System.currentTimeMillis()
@@ -145,6 +159,8 @@ class TaskFlowViewModel(
             val before = previous[id] ?: continue
             if (before.isCompleted == task.isCompleted) continue
             if (consumeLocalCompletionChange(id, task.isCompleted)) continue
+            // Not shared with anyone: nothing to tell the user about.
+            if (task.projectId !in sharedProjectIds) continue
             remoteChanges.add(task)
         }
         if (remoteChanges.isEmpty()) return
@@ -158,12 +174,38 @@ class TaskFlowViewModel(
                     if (task.isCompleted) "✓ $who completed: '${task.title}'"
                     else "$who reopened: '${task.title}'"
                 )
-                _remoteTaskUpdates.emit(
-                    RemoteTaskUpdate(
-                        taskId = task.id,
-                        taskTitle = task.title,
-                        who = who,
-                        completed = task.isCompleted
+                _remoteEvents.emit(
+                    RemoteEvent(
+                        key = "task:${task.id}",
+                        trayTitle = if (task.isCompleted) "Task completed" else "Task reopened",
+                        trayText = if (task.isCompleted) "$who completed '${task.title}'"
+                        else "$who reopened '${task.title}'"
+                    )
+                )
+            }
+        }
+    }
+
+    /** Tells the user when somebody shares a project with them. */
+    private fun announceNewlySharedProjects(sharedWithMe: List<Project>) {
+        val currentIds = sharedWithMe.map { it.id }.toSet()
+        val previous = knownSharedWithMeIds
+        knownSharedWithMeIds = currentIds
+        // First snapshot is only the baseline.
+        if (previous == null) return
+        val added = sharedWithMe.filter { it.id !in previous }
+        if (added.isEmpty()) return
+        viewModelScope.launch {
+            for (project in added) {
+                val who = if (project.ownerEmail.isBlank()) "Someone"
+                else repository.resolveDisplayName(project.ownerEmail)
+                val title = project.displayTitle.ifBlank { "Untitled project" }
+                postNotification("$who shared project '$title' with you")
+                _remoteEvents.emit(
+                    RemoteEvent(
+                        key = "project-shared:${project.id}",
+                        trayTitle = "Project shared with you",
+                        trayText = "$who shared '$title' with you"
                     )
                 )
             }
@@ -171,6 +213,20 @@ class TaskFlowViewModel(
     }
 
     init {
+        // Which projects count as shared (owned + shared with somebody, or shared with me)
+        viewModelScope.launch {
+            try {
+                combine(projects, sharedProjects) { owned, sharedWithMe ->
+                    owned.filter { it.memberEmails.isNotEmpty() }.map { it.id }.toSet() +
+                        sharedWithMe.map { it.id }
+                }.collect { sharedProjectIds = it }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Shared project watcher stopped", e)
+            }
+        }
+        // Task completed / reopened elsewhere
         viewModelScope.launch {
             try {
                 allTasks.collect { announceRemoteCompletionChanges(it) }
@@ -178,6 +234,17 @@ class TaskFlowViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Remote task change watcher stopped", e)
+            }
+        }
+        // Somebody shared a project with me. Uses its own cold flow (not the StateFlow above) so the
+        // initial empty placeholder value is never mistaken for "no projects shared yet".
+        viewModelScope.launch {
+            try {
+                repository.observeSharedProjects().collect { announceNewlySharedProjects(it) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Project share watcher stopped", e)
             }
         }
     }
@@ -328,7 +395,7 @@ class TaskFlowViewModel(
                 } else {
                     "Reopened task: '${task.title}'"
                 }
-                postNotification(msg)
+                postNotificationIfShared(msg, task.projectId)
             } catch (e: Exception) {
                 localCompletionChanges.remove(task.id)
                 Log.e(TAG, "Failed to toggle task completion", e)
@@ -370,7 +437,7 @@ class TaskFlowViewModel(
         viewModelScope.launch {
             try {
                 repository.promoteSubtaskToTask(task, subtask)
-                postNotification("Promoted subtask '${subtask.title}' to a task!")
+                postNotificationIfShared("Promoted subtask '${subtask.title}' to a task!", task.projectId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to promote subtask", e)
             }
@@ -381,7 +448,7 @@ class TaskFlowViewModel(
         viewModelScope.launch {
             try {
                 repository.reassignTaskToList(task, targetListId, targetProjectId)
-                postNotification("Task moved to selected list")
+                postNotificationIfShared("Task moved to selected list", task.projectId, targetProjectId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to reassign task", e)
             }

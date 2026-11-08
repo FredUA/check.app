@@ -142,17 +142,16 @@ fun AppMainContent(
         }
     }
 
-    // Tray notifications for tasks completed/reopened elsewhere while the app isn't visible.
+    // Tray notifications for changes made elsewhere in shared projects while the app isn't visible.
     // Collected here (not in a single screen) so it works from any screen.
     LaunchedEffect(taskFlowViewModel) {
-        taskFlowViewModel.remoteTaskUpdates.collect { update ->
+        taskFlowViewModel.remoteEvents.collect { event ->
             if (!AppForegroundTracker.isInForeground) {
                 NotificationHelper.showTaskUpdate(
                     context = context,
-                    key = update.taskId,
-                    title = if (update.completed) "Task completed" else "Task reopened",
-                    text = if (update.completed) "${update.who} completed '${update.taskTitle}'"
-                    else "${update.who} reopened '${update.taskTitle}'"
+                    key = event.key,
+                    title = event.trayTitle,
+                    text = event.trayText
                 )
             }
         }
