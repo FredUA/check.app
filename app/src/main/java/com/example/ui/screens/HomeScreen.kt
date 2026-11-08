@@ -237,6 +237,19 @@ fun HomeScreen(
         label = "content_blur"
     )
 
+    // Row move animations are on only around a swipe-to-delete (see the task rows below).
+    var swipeInProgress by remember { mutableStateOf(false) }
+    var animateRowPlacement by remember { mutableStateOf(false) }
+    LaunchedEffect(swipeInProgress) {
+        if (swipeInProgress) {
+            animateRowPlacement = true
+        } else {
+            // Keep it on while the deleted row's neighbours slide into place.
+            delay(1_500)
+            animateRowPlacement = false
+        }
+    }
+
     var isQuickAddActive by remember { mutableStateOf(false) }
     val imeBottom = WindowInsets.ime.asPaddingValues().calculateBottomPadding()
     val isImeOpen = imeBottom > 0.dp
@@ -754,10 +767,17 @@ fun HomeScreen(
                             NeonBlue
                         }
 
-                        // Swipe left or right to delete; the rows below slide up smoothly (animateItem).
+                        // Swipe left or right to delete. The rows below slide up smoothly (animateItem), but only
+                        // while a swipe is under way: always-on item animations made the list flicker when the
+                        // keyboard opened or a task was added.
                         SwipeToDeleteBox(
                             onDelete = { viewModel.deleteTask(task.id) },
-                            modifier = Modifier.animateItem()
+                            onSwipeActiveChanged = { active -> swipeInProgress = active },
+                            modifier = if (animateRowPlacement) {
+                                Modifier.animateItem(fadeInSpec = null, fadeOutSpec = null)
+                            } else {
+                                Modifier
+                            }
                         ) {
                             TaskRowItem(
                                 task = task,
