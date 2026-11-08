@@ -46,6 +46,8 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             ?: throw IllegalStateException("User must be signed in with Google before accessing Firestore.")
     }
 
+    fun currentUserId(): String = auth.currentUser?.uid.orEmpty()
+
     fun currentUserEmail(): String {
         return auth.currentUser?.email.orEmpty().trim().lowercase()
     }
@@ -130,23 +132,26 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
 
     // --- Projects ---
 
-    fun observeProjects(): Flow<List<Project>> {
+    /** @param includeMetadata also emit on metadata-only changes (see [observeLists]); for the change watcher. */
+    fun observeProjects(includeMetadata: Boolean = false): Flow<List<Project>> {
         if (DemoMode.isDemoActive.value) {
             return DemoMode.observeProjects()
         }
+        val metadataChanges = if (includeMetadata) MetadataChanges.INCLUDE else MetadataChanges.EXCLUDE
         return flow {
             val uid = requireUserId()
             val path = "projects"
             emitAll(
                 db.collection(path)
                     .whereEqualTo("ownerId", uid)
-                    .snapshots()
+                    .snapshots(metadataChanges)
                     .map { snapshot ->
                         snapshot.documents.mapNotNull { doc ->
                             doc.toObject(Project::class.java)?.copy(
                                 id = doc.id,
                                 name = doc.getString("name") ?: doc.getString("title").orEmpty(),
-                                title = doc.getString("name") ?: doc.getString("title").orEmpty()
+                                title = doc.getString("name") ?: doc.getString("title").orEmpty(),
+                                fromCache = doc.metadata.isFromCache
                             )
                         }
                     }
@@ -158,10 +163,11 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
     }
 
-    fun observeSharedProjects(): Flow<List<Project>> {
+    fun observeSharedProjects(includeMetadata: Boolean = false): Flow<List<Project>> {
         if (DemoMode.isDemoActive.value) {
             return DemoMode.observeSharedProjects()
         }
+        val metadataChanges = if (includeMetadata) MetadataChanges.INCLUDE else MetadataChanges.EXCLUDE
         return flow {
             val email = currentUserEmail()
             if (email.isBlank()) {
@@ -172,14 +178,15 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             emitAll(
                 db.collection(path)
                     .whereArrayContains("memberEmails", email)
-                    .snapshots()
+                    .snapshots(metadataChanges)
                     .map { snapshot ->
                         val uid = auth.currentUser?.uid.orEmpty()
                         snapshot.documents.mapNotNull { doc ->
                             val proj = doc.toObject(Project::class.java)?.copy(
                                 id = doc.id,
                                 name = doc.getString("name") ?: doc.getString("title").orEmpty(),
-                                title = doc.getString("name") ?: doc.getString("title").orEmpty()
+                                title = doc.getString("name") ?: doc.getString("title").orEmpty(),
+                                fromCache = doc.metadata.isFromCache
                             )
                             if (proj?.ownerId != uid) proj else null
                         }
@@ -192,8 +199,8 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
     }
 
-    fun observeAccessibleProjects(): Flow<List<Project>> {
-        return combine(observeProjects(), observeSharedProjects()) { owned, shared ->
+    fun observeAccessibleProjects(includeMetadata: Boolean = false): Flow<List<Project>> {
+        return combine(observeProjects(includeMetadata), observeSharedProjects(includeMetadata)) { owned, shared ->
             owned + shared.filter { s -> owned.none { it.id == s.id } }
         }
     }
@@ -246,6 +253,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "memberIds" to project.memberIds,
                 "memberEmails" to project.memberEmails,
                 "sharedWith" to project.sharedWith,
+                "lastUpdatedBy" to currentUserEmail(),
                 "createdAt" to (project.createdAt ?: FieldValue.serverTimestamp()),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -397,6 +405,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             "colorHex" to colorHex,
             "projectId" to projectId,
             "ownerId" to uid,
+            "lastUpdatedBy" to currentUserEmail(),
             "tasks" to emptyMap<String, Any>(),
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
@@ -423,6 +432,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "name", list.displayTitle.trim(),
                 "title", list.displayTitle.trim(),
                 "colorHex", list.colorHex,
+                "lastUpdatedBy", currentUserEmail(),
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -441,6 +451,11 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         if (projectId.isBlank()) return
         val docRef = db.collection("projects").document(projectId).collection("lists").document(listId)
         try {
+            // A deleted list can't say who deleted it, so record the editor on the project first.
+            try {
+                db.collection("projects").document(projectId)
+                    .update("lastUpdatedBy", currentUserEmail()).await()
+            } catch (_: Exception) {}
             docRef.delete().await()
         } catch (e: CancellationException) {
             throw e

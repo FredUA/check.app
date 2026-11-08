@@ -27,6 +27,12 @@ import kotlinx.coroutines.launch
 
 private const val TAG = "TaskFlowViewModel"
 
+// A list not seen before counts as "just created" if it was created within this long (server time).
+private const val NEW_LIST_WINDOW_MS = 120_000L
+
+// How long list deletions are held back, to tell "project deleted" from "lists deleted one by one".
+private const val LIST_DELETION_SETTLE_MS = 2_000L
+
 enum class SortOption(val displayName: String) {
     DATE_NEWEST("Newest first"),
     DATE_OLDEST("Oldest first"),
@@ -163,6 +169,8 @@ class TaskFlowViewModel(
         if (prevLists == null || prevTasks == null) return
         if (com.example.demo.DemoMode.isDemoActive.value) return
 
+        announceRemoteListChanges(currentLists, prevLists)
+
         val changes = mutableListOf<TaskChange>()
 
         for ((id, now) in currentTasks) {
@@ -226,6 +234,139 @@ class TaskFlowViewModel(
         }
     }
 
+    // --- Lists and projects ---
+
+    // Deleted on this device: their disappearance must not be announced as someone else's doing.
+    // (A deleted document can't carry a "pending writes" flag the way edited ones do.)
+    private val locallyDeletedListIds = mutableSetOf<String>()
+    private val locallyDeletedProjectIds = mutableSetOf<String>()
+
+    // List deletions are collected for a moment: deleting a whole project removes its lists one by one
+    // right before the project itself, and that should read as one "project deleted", not N list deletions.
+    private val pendingListDeletions = mutableListOf<TaskList>()
+    private var listDeletionFlushJob: kotlinx.coroutines.Job? = null
+
+    private var previousAccessibleProjects: Map<String, Project>? = null
+
+    /** A notification to show; "{who}" in the texts is replaced with the name of [byEmail]. */
+    private class Announcement(
+        val key: String,
+        val byEmail: String,
+        val banner: String,
+        val trayTitle: String,
+        val trayText: String
+    )
+
+    private suspend fun deliver(a: Announcement) {
+        val who = if (a.byEmail.isBlank()) "Someone" else repository.resolveDisplayName(a.byEmail)
+        postNotification(a.banner.replace("{who}", who))
+        _remoteEvents.emit(RemoteEvent(a.key, a.trayTitle, a.trayText.replace("{who}", who)))
+    }
+
+    private fun announceRemoteListChanges(currentLists: Map<String, TaskList>, prevLists: Map<String, TaskList>) {
+        val now = System.currentTimeMillis()
+        val announcements = mutableListOf<Announcement>()
+
+        for ((id, list) in currentLists) {
+            if (list.projectId !in sharedProjectIds) continue
+            val before = prevLists[id]
+            val title = list.displayTitle
+            if (before == null) {
+                // A list we haven't seen before. Only count it as new if it was created just now: lists of a
+                // project that was just shared with me, or that reappear after a reload, are old.
+                val createdMs = list.createdAt?.toDate()?.time ?: continue
+                if (list.hasPendingWrites || now - createdMs !in -30_000L..NEW_LIST_WINDOW_MS) continue
+                announcements.add(
+                    Announcement("list:$id", list.lastUpdatedBy, "{who} added list: '$title'", "List added", "{who} added '$title'")
+                )
+            } else if (isRemoteChange(list, before) && title != before.displayTitle) {
+                announcements.add(
+                    Announcement(
+                        "list:$id", list.lastUpdatedBy,
+                        "{who} renamed list: '${before.displayTitle}' → '$title'",
+                        "List renamed", "{who} renamed '${before.displayTitle}' to '$title'"
+                    )
+                )
+            }
+        }
+
+        var deletionsQueued = false
+        for ((id, before) in prevLists) {
+            if (id in currentLists) continue
+            when {
+                id in locallyDeletedListIds -> continue
+                before.projectId in locallyDeletedProjectIds -> continue
+                // Stale cache catching up with the server: not something that just happened.
+                before.fromCache -> continue
+                before.projectId !in sharedProjectIds -> continue
+            }
+            pendingListDeletions.add(before)
+            deletionsQueued = true
+        }
+
+        if (announcements.isNotEmpty()) {
+            viewModelScope.launch { announcements.forEach { deliver(it) } }
+        }
+        if (deletionsQueued) {
+            listDeletionFlushJob?.cancel()
+            listDeletionFlushJob = viewModelScope.launch {
+                kotlinx.coroutines.delay(LIST_DELETION_SETTLE_MS)
+                flushListDeletions()
+            }
+        }
+    }
+
+    private suspend fun flushListDeletions() {
+        val batch = pendingListDeletions.toList()
+        pendingListDeletions.clear()
+        val projectsNow = (projects.value + sharedProjects.value).associateBy { it.id }
+        for (list in batch) {
+            // The whole project went away meanwhile (deleted or unshared): that has its own notification.
+            if (list.projectId !in sharedProjectIds || list.projectId in locallyDeletedProjectIds) continue
+            val title = list.displayTitle
+            deliver(
+                Announcement(
+                    "list:${list.id}", projectsNow[list.projectId]?.lastUpdatedBy.orEmpty(),
+                    "{who} deleted list: '$title'", "List deleted", "{who} deleted '$title'"
+                )
+            )
+        }
+    }
+
+    /** A shared project disappeared: it was deleted, or the owner removed this user's access. */
+    private fun announceRemovedProjects(accessible: List<Project>) {
+        val current = accessible.associateBy { it.id }
+        val previous = previousAccessibleProjects
+        previousAccessibleProjects = current
+        // First snapshot is only the baseline. Demo mode edits are all local.
+        if (previous == null || com.example.demo.DemoMode.isDemoActive.value) return
+        val myUid = repository.currentUserId()
+        val gone = previous.values.filter { before ->
+            before.id !in current &&
+                !before.fromCache &&
+                before.id !in locallyDeletedProjectIds &&
+                // Mine and not shared with anybody: nobody else is affected. Others' projects are shared with me.
+                (before.ownerId != myUid || before.memberEmails.isNotEmpty())
+        }
+        if (gone.isEmpty()) return
+        viewModelScope.launch {
+            for (project in gone) {
+                val title = project.displayTitle.ifBlank { "Untitled project" }
+                deliver(
+                    if (project.ownerId == myUid) {
+                        Announcement("project:${project.id}", "", "Project '$title' was deleted", "Project deleted", "'$title' was deleted")
+                    } else {
+                        Announcement(
+                            "project:${project.id}", project.ownerEmail,
+                            "{who} deleted or unshared project: '$title'", "Project removed",
+                            "{who} deleted or unshared '$title'"
+                        )
+                    }
+                )
+            }
+        }
+    }
+
     /** Tells the user when somebody shares a project with them. */
     private fun announceNewlySharedProjects(sharedWithMe: List<Project>) {
         val currentIds = sharedWithMe.map { it.id }.toSet()
@@ -275,6 +416,16 @@ class TaskFlowViewModel(
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Remote task change watcher stopped", e)
+            }
+        }
+        // A shared project was deleted / my access was removed
+        viewModelScope.launch {
+            try {
+                repository.observeAccessibleProjects(includeMetadata = true).collect { announceRemovedProjects(it) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Removed project watcher stopped", e)
             }
         }
         // Somebody shared a project with me. Uses its own cold flow (not the StateFlow above) so the
@@ -345,6 +496,8 @@ class TaskFlowViewModel(
 
     fun deleteProject(projectId: String) {
         viewModelScope.launch {
+            // Mark before deleting: the disappearance reaches the watchers before the call returns.
+            locallyDeletedProjectIds.add(projectId)
             try {
                 repository.deleteProject(projectId)
                 if (_selectedProjectId.value == projectId) {
@@ -381,6 +534,7 @@ class TaskFlowViewModel(
 
     fun deleteList(listId: String) {
         viewModelScope.launch {
+            locallyDeletedListIds.add(listId)
             try {
                 val targetList = allLists.value.firstOrNull { it.id == listId }
                     ?: sharedLists.value.firstOrNull { it.id == listId }
