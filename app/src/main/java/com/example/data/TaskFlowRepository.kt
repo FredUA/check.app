@@ -562,24 +562,6 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
     }
 
-    /** Puts a deleted task back into its list, with its original id, content and creation time (Undo). */
-    suspend fun restoreTask(task: TaskItem) {
-        if (DemoMode.isDemoActive.value) return
-        val listRef = db.collection("projects").document(task.projectId).collection("lists").document(task.listId)
-        try {
-            listRef.update(
-                "tasks.${task.id}", task.toMap(),
-                "lastUpdatedBy", currentUserEmail(),
-                "updatedAt", FieldValue.serverTimestamp()
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, listRef.path)
-            throw e
-        }
-    }
-
     suspend fun toggleTaskCompletion(task: TaskItem): Boolean {
         if (DemoMode.isDemoActive.value) {
             return DemoMode.toggleTaskCompletion(task)
