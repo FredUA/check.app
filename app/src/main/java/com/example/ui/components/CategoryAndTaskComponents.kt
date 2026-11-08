@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -103,7 +104,9 @@ fun CategoryCard(
     onClick: () -> Unit,
     onEdit: (() -> Unit)? = null,
     // Project shared with me by somebody else: always gray, whatever color the owner picked.
-    isSharedWithMe: Boolean = false
+    isSharedWithMe: Boolean = false,
+    // My own project that I have shared with other people: marked with a "people" icon.
+    isSharedByMe: Boolean = false
 ) {
     val accentColor = if (isSharedWithMe) {
         SharedGray
@@ -149,12 +152,25 @@ fun CategoryCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "$taskCount tasks",
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isSharedByMe) {
+                            Icon(
+                                imageVector = Icons.Default.People,
+                                contentDescription = "Shared with others",
+                                tint = TextSecondary,
+                                modifier = Modifier
+                                    .size(15.dp)
+                                    .testTag("project_shared_icon_${project.id}")
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                        }
+                        Text(
+                            text = "$taskCount tasks",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     if (onEdit != null) {
                         Box(
                             modifier = Modifier

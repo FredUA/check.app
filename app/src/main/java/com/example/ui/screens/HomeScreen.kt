@@ -529,7 +529,8 @@ fun HomeScreen(
                                         }
                                     },
                                     onEdit = { projectToEdit = project },
-                                    isSharedWithMe = project.id in sharedWithMeIds
+                                    isSharedWithMe = project.id in sharedWithMeIds,
+                                    isSharedByMe = project.id !in sharedWithMeIds && project.memberEmails.isNotEmpty()
                                 )
                             }
                             item {
