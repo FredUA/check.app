@@ -606,6 +606,13 @@ fun HomeScreen(
                                 availableLists.forEach { taskList ->
                                     val count = combinedTasks.count { it.listId == taskList.id }
                                     val isSelected = selectedListId == taskList.id
+                                    // Same color the list's tasks use (gray for lists in projects shared with me)
+                                    val listDotColor = try {
+                                        if (taskList.projectId in sharedWithMeIds) SharedGray
+                                        else Color(android.graphics.Color.parseColor(taskList.colorHex))
+                                    } catch (e: Exception) {
+                                        NeonBlue
+                                    }
                                     FilterChip(
                                         selected = isSelected,
                                         onClick = {
@@ -617,6 +624,18 @@ fun HomeScreen(
                                         },
                                         label = {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                                // A dot in the list's color, so a task's color can be matched to its list.
+                                                // The selected list shows its dot next to the "LISTS" heading instead.
+                                                if (!isSelected) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(listDotColor)
+                                                            .testTag("list_dot_${taskList.id}")
+                                                    )
+                                                    Spacer(modifier = Modifier.width(7.dp))
+                                                }
                                                 Text("${taskList.title} ($count)")
                                                 if (isSelected) {
                                                     Spacer(modifier = Modifier.width(4.dp))
