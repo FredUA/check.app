@@ -24,3 +24,7 @@ val TextSecondary = Color(0xFFA6BAE8) // Soft lavender/periwinkle like in screen
 val TextMuted = Color(0xFF7E93CA)
 
 val CardCompleted = Color(0xFF17244E)
+
+// Projects (and their lists and tasks) that somebody else shared with me are always shown in this gray:
+// the owner picks the colors, a guest can't change them.
+val SharedGray = Color(0xFF8A8F98)

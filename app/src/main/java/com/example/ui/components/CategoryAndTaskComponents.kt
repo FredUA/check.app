@@ -87,6 +87,7 @@ import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
 import com.example.ui.theme.SurfaceCard
+import com.example.ui.theme.SharedGray
 import com.example.ui.theme.SurfaceCardBorder
 import com.example.ui.theme.SurfaceCardLight
 import com.example.ui.theme.TextMuted
@@ -100,12 +101,18 @@ fun CategoryCard(
     completedCount: Int,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onEdit: (() -> Unit)? = null
+    onEdit: (() -> Unit)? = null,
+    // Project shared with me by somebody else: always gray, whatever color the owner picked.
+    isSharedWithMe: Boolean = false
 ) {
-    val accentColor = try {
-        Color(android.graphics.Color.parseColor(project.colorHex))
-    } catch (e: Exception) {
-        NeonPink
+    val accentColor = if (isSharedWithMe) {
+        SharedGray
+    } else {
+        try {
+            Color(android.graphics.Color.parseColor(project.colorHex))
+        } catch (e: Exception) {
+            NeonPink
+        }
     }
 
     val progress = if (taskCount > 0) completedCount.toFloat() / taskCount.toFloat() else 0f

@@ -106,6 +106,7 @@ import com.example.ui.theme.NeonBlue
 import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
+import com.example.ui.theme.SharedGray
 import com.example.ui.theme.SurfaceCard
 import com.example.ui.theme.SurfaceCardBorder
 import com.example.ui.theme.SurfaceCardLight
@@ -190,6 +191,8 @@ fun HomeScreen(
     val combinedProjects = remember(projects, sharedProjects) {
         projects + sharedProjects.filter { sp -> projects.none { it.id == sp.id } }
     }
+    // Projects somebody else shared with me: shown gray, and their colors can't be changed by me.
+    val sharedWithMeIds = remember(sharedProjects) { sharedProjects.map { it.id }.toSet() }
     val combinedLists = remember(allLists, sharedLists) {
         allLists + sharedLists.filter { sl -> allLists.none { it.id == sl.id } }
     }
@@ -525,7 +528,8 @@ fun HomeScreen(
                                             viewModel.selectProject(project.id)
                                         }
                                     },
-                                    onEdit = { projectToEdit = project }
+                                    onEdit = { projectToEdit = project },
+                                    isSharedWithMe = project.id in sharedWithMeIds
                                 )
                             }
                             item {
@@ -740,7 +744,8 @@ fun HomeScreen(
                     items(filteredTasks, key = { it.id }) { task ->
                         val taskList = combinedLists.firstOrNull { it.id == task.listId }
                         val accentColor = try {
-                            if (taskList != null) Color(android.graphics.Color.parseColor(taskList.colorHex))
+                            if (taskList != null && taskList.projectId in sharedWithMeIds) SharedGray
+                            else if (taskList != null) Color(android.graphics.Color.parseColor(taskList.colorHex))
                             else NeonBlue
                         } catch (e: Exception) {
                             NeonBlue
@@ -765,7 +770,8 @@ fun HomeScreen(
                 if (selectedListId != null) {
                     val activeTaskList = combinedLists.firstOrNull { it.id == selectedListId }
                     val listColor = try {
-                        if (activeTaskList != null) Color(android.graphics.Color.parseColor(activeTaskList.colorHex))
+                        if (activeTaskList != null && activeTaskList.projectId in sharedWithMeIds) SharedGray
+                        else if (activeTaskList != null) Color(android.graphics.Color.parseColor(activeTaskList.colorHex))
                         else NeonBlue
                     } catch (e: Exception) {
                         NeonBlue
@@ -893,7 +899,8 @@ fun HomeScreen(
             onConfirm = { projId, title, colorHex ->
                 viewModel.createList(projId, title, colorHex)
                 showCreateListDialog = false
-            }
+            },
+            colorLockedProjectIds = sharedWithMeIds
         )
     }
 
@@ -970,7 +977,8 @@ fun HomeScreen(
             },
             onUnshare = { email ->
                 viewModel.unshareProject(project.id, email)
-            }
+            },
+            allowColorChange = project.id !in sharedWithMeIds
         )
     }
 
@@ -987,7 +995,8 @@ fun HomeScreen(
             onDelete = { listId ->
                 viewModel.deleteList(listId)
                 listToEdit = null
-            }
+            },
+            allowColorChange = list.projectId !in sharedWithMeIds
         )
     }
 

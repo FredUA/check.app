@@ -181,7 +181,9 @@ fun CreateListDialog(
     projects: List<Project>,
     initialProjectId: String?,
     onDismiss: () -> Unit,
-    onConfirm: (projectId: String, title: String, colorHex: String) -> Unit
+    onConfirm: (projectId: String, title: String, colorHex: String) -> Unit,
+    // Projects shared with me by somebody else: the color is not mine to pick there.
+    colorLockedProjectIds: Set<String> = emptySet()
 ) {
     var title by remember { mutableStateOf("") }
     var selectedProjectId by remember { mutableStateOf(initialProjectId ?: projects.firstOrNull()?.id.orEmpty()) }
@@ -254,25 +256,27 @@ fun CreateListDialog(
                 )
 
                 Spacer(modifier = Modifier.height(14.dp))
-                Text("Color", color = TextSecondary, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PRESET_COLORS.forEach { hex ->
-                        val color = Color(android.graphics.Color.parseColor(hex))
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .clickable { selectedColor = hex }
-                                .then(
-                                    if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (selectedColor == hex) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                if (selectedProjectId !in colorLockedProjectIds) {
+                    Text("Color", color = TextSecondary, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PRESET_COLORS.forEach { hex ->
+                            val color = Color(android.graphics.Color.parseColor(hex))
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .clickable { selectedColor = hex }
+                                    .then(
+                                        if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
+                                        else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selectedColor == hex) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
                     }
@@ -283,7 +287,12 @@ fun CreateListDialog(
             Button(
                 onClick = {
                     if (title.isNotBlank() && selectedProjectId.isNotBlank()) {
-                        onConfirm(selectedProjectId, title, selectedColor)
+                        // Locked projects get the default color; the guest only ever sees gray there anyway.
+                        onConfirm(
+                            selectedProjectId,
+                            title,
+                            if (selectedProjectId in colorLockedProjectIds) PRESET_COLORS[1] else selectedColor
+                        )
                     }
                 },
                 enabled = title.isNotBlank() && selectedProjectId.isNotBlank(),
@@ -534,7 +543,9 @@ fun EditProjectDialog(
     onSave: (Project) -> Unit,
     onDelete: (String) -> Unit,
     onShare: (() -> Unit)? = null,
-    onUnshare: ((String) -> Unit)? = null
+    onUnshare: ((String) -> Unit)? = null,
+    // False for projects somebody else shared with me: the owner picks the colors.
+    allowColorChange: Boolean = true
 ) {
     var title by remember { mutableStateOf(project.title) }
     var description by remember { mutableStateOf(project.description) }
@@ -625,26 +636,28 @@ fun EditProjectDialog(
                     ),
                     modifier = Modifier.fillMaxWidth().testTag("edit_project_desc_input")
                 )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Theme Color", color = TextSecondary, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PRESET_COLORS.forEach { hex ->
-                        val color = Color(android.graphics.Color.parseColor(hex))
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .clickable { selectedColor = hex }
-                                .then(
-                                    if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (selectedColor == hex) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                if (allowColorChange) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Theme Color", color = TextSecondary, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PRESET_COLORS.forEach { hex ->
+                            val color = Color(android.graphics.Color.parseColor(hex))
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .clickable { selectedColor = hex }
+                                    .then(
+                                        if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
+                                        else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selectedColor == hex) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
                     }
@@ -735,7 +748,9 @@ fun EditListDialog(
     onSave: (TaskList) -> Unit,
     onDelete: (String) -> Unit,
     onShare: (() -> Unit)? = null,
-    onUnshare: ((String) -> Unit)? = null
+    onUnshare: ((String) -> Unit)? = null,
+    // False for lists in projects somebody else shared with me: the owner picks the colors.
+    allowColorChange: Boolean = true
 ) {
     var title by remember { mutableStateOf(list.title) }
     var selectedProjectId by remember { mutableStateOf(list.projectId) }
@@ -848,26 +863,28 @@ fun EditListDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-                Text("Theme Color", color = TextSecondary, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PRESET_COLORS.forEach { hex ->
-                        val color = Color(android.graphics.Color.parseColor(hex))
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .clickable { selectedColor = hex }
-                                .then(
-                                    if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
-                                    else Modifier
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            if (selectedColor == hex) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                if (allowColorChange) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Theme Color", color = TextSecondary, fontSize = 13.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PRESET_COLORS.forEach { hex ->
+                            val color = Color(android.graphics.Color.parseColor(hex))
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .clickable { selectedColor = hex }
+                                    .then(
+                                        if (selectedColor == hex) Modifier.border(2.dp, Color.White, CircleShape)
+                                        else Modifier
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selectedColor == hex) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                                }
                             }
                         }
                     }
