@@ -4,4 +4,11 @@
     <style name="Theme.MyApplication" parent="android:Theme.DeviceDefault.NoActionBar">
         <item name="android:windowBackground">@color/app_background</item>
     </style>
+
+    <!-- Small dimmed popup (the widget's list picker) -->
+    <style name="Theme.MyApplication.Popup" parent="android:Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
 </resources>

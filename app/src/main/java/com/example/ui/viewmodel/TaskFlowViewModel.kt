@@ -460,6 +460,12 @@ class TaskFlowViewModel(
         _selectedListId.value = null
     }
 
+    /** Shows exactly this list (and its project), without the toggle-off behaviour of the two selectors above. */
+    fun showList(projectId: String, listId: String) {
+        _selectedProjectId.value = projectId
+        _selectedListId.value = listId
+    }
+
     fun selectList(listId: String?) {
         _selectedListId.value = if (_selectedListId.value == listId) null else listId
     }

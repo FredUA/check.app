@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -36,6 +37,11 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.AuthUiState
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.viewmodel.TaskFlowViewModel
+import com.example.widget.CheckListWidget
+import com.example.widget.WidgetIntents
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
@@ -43,8 +49,14 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class MainActivity : ComponentActivity() {
 
+    /** Set when the home-screen widget asks for the "New list" dialog of a project. */
+    private var newListProjectId by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // A recreated activity (rotation, process restore) gets the original intent again: don't re-open the dialog.
+        if (savedInstanceState == null) handleWidgetIntent(intent)
 
         // Knows whether the app is visible, so tray notifications are only raised in the background
         AppForegroundTracker.register(application)
@@ -109,11 +121,32 @@ class MainActivity : ComponentActivity() {
                             authViewModel = authViewModel,
                             taskFlowViewModel = taskFlowViewModel,
                             userProfile = profile,
-                            userEmail = userEmail
+                            userEmail = userEmail,
+                            newListProjectId = newListProjectId,
+                            onNewListHandled = { newListProjectId = null }
                         )
                     }
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleWidgetIntent(intent)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Changes made in the app show up in placed widgets as soon as the user leaves it.
+        val appContext = applicationContext
+        CoroutineScope(Dispatchers.Default).launch { CheckListWidget.refreshAll(appContext) }
+    }
+
+    private fun handleWidgetIntent(intent: Intent?) {
+        if (intent?.action == WidgetIntents.ACTION_NEW_LIST) {
+            newListProjectId = intent.getStringExtra(WidgetIntents.EXTRA_PROJECT_ID)
         }
     }
 }
@@ -123,10 +156,20 @@ fun AppMainContent(
     authViewModel: AuthViewModel,
     taskFlowViewModel: TaskFlowViewModel,
     userProfile: com.example.data.model.UserProfile?,
-    userEmail: String
+    userEmail: String,
+    newListProjectId: String? = null,
+    onNewListHandled: () -> Unit = {}
 ) {
     var isDrawerOpen by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") } // "home", "shared", "settings"
+
+    // The widget's "New list" button: go to the home screen, where the dialog opens.
+    LaunchedEffect(newListProjectId) {
+        if (newListProjectId != null) {
+            currentScreen = "home"
+            isDrawerOpen = false
+        }
+    }
 
     val context = LocalContext.current
 
@@ -194,7 +237,9 @@ fun AppMainContent(
                     userProfile = userProfile,
                     userEmail = userEmail,
                     viewModel = taskFlowViewModel,
-                    onOpenDrawer = { isDrawerOpen = true }
+                    onOpenDrawer = { isDrawerOpen = true },
+                    newListProjectId = newListProjectId,
+                    onNewListHandled = onNewListHandled
                 )
             }
             "shared" -> {

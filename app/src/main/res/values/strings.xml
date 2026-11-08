@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">check.app</string>
+    <string name="widget_name">Project list</string>
+    <string name="widget_description">Tasks from one list of your project, with a quick “New list” button.</string>
 </resources>

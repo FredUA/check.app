@@ -125,7 +125,10 @@ fun HomeScreen(
     userProfile: UserProfile?,
     userEmail: String,
     viewModel: TaskFlowViewModel,
-    onOpenDrawer: () -> Unit
+    onOpenDrawer: () -> Unit,
+    // Set when the home-screen widget's "New list" button opened the app: the project to attach the list to.
+    newListProjectId: String? = null,
+    onNewListHandled: () -> Unit = {}
 ) {
     val projects by viewModel.projects.collectAsState()
     val sharedProjects by viewModel.sharedProjects.collectAsState()
@@ -184,6 +187,14 @@ fun HomeScreen(
     // Dialog States
     var showCreateProjectDialog by remember { mutableStateOf(false) }
     var showCreateListDialog by remember { mutableStateOf(false) }
+    var createListFromWidgetProjectId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(newListProjectId) {
+        if (newListProjectId != null) {
+            createListFromWidgetProjectId = newListProjectId
+            showCreateListDialog = true
+            onNewListHandled()
+        }
+    }
     var showCreateTaskDialog by remember { mutableStateOf(false) }
     var selectedTaskForDetail by remember { mutableStateOf<TaskItem?>(null) }
     var projectToEdit by remember { mutableStateOf<Project?>(null) }
@@ -943,11 +954,20 @@ fun HomeScreen(
     if (showCreateListDialog) {
         CreateListDialog(
             projects = combinedProjects,
-            initialProjectId = selectedProjectId,
-            onDismiss = { showCreateListDialog = false },
-            onConfirm = { projId, title, colorHex ->
-                viewModel.createList(projId, title, colorHex)
+            initialProjectId = createListFromWidgetProjectId ?: selectedProjectId,
+            onDismiss = {
                 showCreateListDialog = false
+                createListFromWidgetProjectId = null
+            },
+            onConfirm = { projId, title, colorHex ->
+                if (createListFromWidgetProjectId != null) {
+                    // Opened from the widget: land on the new list, ready for adding tasks.
+                    viewModel.createList(projId, title, colorHex) { listId -> viewModel.showList(projId, listId) }
+                } else {
+                    viewModel.createList(projId, title, colorHex)
+                }
+                showCreateListDialog = false
+                createListFromWidgetProjectId = null
             },
             colorLockedProjectIds = sharedWithMeIds
         )
