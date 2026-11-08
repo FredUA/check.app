@@ -107,6 +107,31 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
     }
 
+    // --- Push (FCM) device registration: users/{uid}/devices/{deviceId} ---
+
+    /** Stores this device's FCM token for the signed-in user; the Cloud Function reads it to send pushes. */
+    suspend fun registerDevice(token: String) {
+        if (DemoMode.isDemoActive.value) return
+        val uid = auth.currentUser?.uid ?: return
+        if (DeviceIdentity.id.isEmpty() || token.isBlank()) return
+        db.collection("users").document(uid).collection("devices").document(DeviceIdentity.id)
+            .set(
+                mapOf(
+                    "token" to token,
+                    "deviceId" to DeviceIdentity.id,
+                    "platform" to "android",
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+    }
+
+    /** Forgets this device for the signed-in user (call before signing out, while still allowed to write). */
+    suspend fun unregisterDevice() {
+        val uid = auth.currentUser?.uid ?: return
+        if (DeviceIdentity.id.isEmpty()) return
+        db.collection("users").document(uid).collection("devices").document(DeviceIdentity.id).delete().await()
+    }
+
     suspend fun saveUserProfile(profile: UserProfile) {
         if (DemoMode.isDemoActive.value) return
         val uid = requireUserId()
@@ -254,6 +279,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "memberEmails" to project.memberEmails,
                 "sharedWith" to project.sharedWith,
                 "lastUpdatedBy" to currentUserEmail(),
+                "lastUpdatedByDevice" to DeviceIdentity.id,
                 "createdAt" to (project.createdAt ?: FieldValue.serverTimestamp()),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
@@ -273,6 +299,15 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         }
         val docRef = db.collection("projects").document(projectId)
         try {
+            // Tell the server this is a whole-project deletion (it must not announce every list separately)
+            // and who is doing it; the deleted document itself can't say.
+            try {
+                docRef.update(
+                    "deleting", true,
+                    "lastUpdatedBy", currentUserEmail(),
+                    "lastUpdatedByDevice", DeviceIdentity.id
+                ).await()
+            } catch (_: Exception) {}
             // Delete all subcollection lists
             val listsSnap = docRef.collection("lists").get().await()
             for (doc in listsSnap.documents) {
@@ -299,6 +334,8 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             docRef.update(
                 "memberEmails", FieldValue.arrayUnion(trimmed),
                 "memberIds", FieldValue.arrayUnion(trimmed),
+                "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -321,6 +358,8 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             docRef.update(
                 "memberEmails", FieldValue.arrayRemove(trimmed),
                 "memberIds", FieldValue.arrayRemove(trimmed),
+                "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -406,6 +445,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             "projectId" to projectId,
             "ownerId" to uid,
             "lastUpdatedBy" to currentUserEmail(),
+            "lastUpdatedByDevice" to DeviceIdentity.id,
             "tasks" to emptyMap<String, Any>(),
             "createdAt" to FieldValue.serverTimestamp(),
             "updatedAt" to FieldValue.serverTimestamp()
@@ -433,6 +473,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "title", list.displayTitle.trim(),
                 "colorHex", list.colorHex,
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -454,7 +495,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             // A deleted list can't say who deleted it, so record the editor on the project first.
             try {
                 db.collection("projects").document(projectId)
-                    .update("lastUpdatedBy", currentUserEmail()).await()
+                    .update("lastUpdatedBy", currentUserEmail(), "lastUpdatedByDevice", DeviceIdentity.id).await()
             } catch (_: Exception) {}
             docRef.delete().await()
         } catch (e: CancellationException) {
@@ -525,6 +566,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             listRef.update(
                 "tasks.$taskId", taskData,
                 "lastUpdatedBy", currentEmail,
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
             return taskId
@@ -552,6 +594,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -576,6 +619,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.lastUpdatedBy" to currentUserEmail(),
                 "tasks.${task.id}.updatedAt" to Timestamp.now(),
                 "lastUpdatedBy" to currentUserEmail(),
+                "lastUpdatedByDevice" to DeviceIdentity.id,
                 "updatedAt" to FieldValue.serverTimestamp()
             )
             listRef.update(updates).await()
@@ -606,6 +650,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -636,6 +681,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -659,6 +705,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -694,6 +741,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 oldListRef.update(
                     "tasks.${task.id}", FieldValue.delete(),
                     "lastUpdatedBy", currentUserEmail(),
+                    "lastUpdatedByDevice", DeviceIdentity.id,
                     "updatedAt", FieldValue.serverTimestamp()
                 ).await()
             } catch (_: Exception) {}
@@ -704,6 +752,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             newListRef.update(
                 "tasks.${task.id}", updatedTask.toMap(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {
@@ -725,6 +774,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             listRef.update(
                 "tasks.$taskId", FieldValue.delete(),
                 "lastUpdatedBy", currentUserEmail(),
+                "lastUpdatedByDevice", DeviceIdentity.id,
                 "updatedAt", FieldValue.serverTimestamp()
             ).await()
         } catch (e: CancellationException) {

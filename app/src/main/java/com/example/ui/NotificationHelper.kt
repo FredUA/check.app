@@ -68,6 +68,7 @@ object NotificationHelper {
                 .setStyle(NotificationCompat.BigTextStyle().bigText(text))
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
+                .setOnlyAlertOnce(true)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .build()

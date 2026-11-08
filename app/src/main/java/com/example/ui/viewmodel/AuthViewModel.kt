@@ -186,9 +186,15 @@ class AuthViewModel(
     }
 
     fun signOut(context: Context) {
-        auth.signOut()
         val credentialManager = CredentialManager.create(context)
         viewModelScope.launch {
+            // Stop pushes for this account on this device. Must happen while still signed in (security rules).
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(3_000) { repository.unregisterDevice() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not unregister device for push", e)
+            }
+            auth.signOut()
             try {
                 credentialManager.clearCredentialState(ClearCredentialStateRequest())
             } catch (e: Exception) {

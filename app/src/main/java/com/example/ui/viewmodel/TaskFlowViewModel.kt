@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 
 private const val TAG = "TaskFlowViewModel"
 
@@ -653,6 +654,20 @@ class TaskFlowViewModel(
                 repository.deleteTask(taskId, listId, projectId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete task", e)
+            }
+        }
+    }
+
+    /** Registers this device's FCM token so the server can send pushes about shared projects. */
+    fun registerForPush() {
+        viewModelScope.launch {
+            try {
+                val token = com.google.firebase.messaging.FirebaseMessaging.getInstance().token.await()
+                repository.registerDevice(token)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Push registration failed", e)
             }
         }
     }

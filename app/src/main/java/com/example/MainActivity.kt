@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.TaskFlowRepository
 import com.example.ui.components.DrawerContent
 import com.example.ui.components.ThreeDimensionalDrawerScaffold
+import com.example.data.DeviceIdentity
 import com.example.ui.AppForegroundTracker
 import com.example.ui.NotificationHelper
 import com.example.ui.configureAppCheck
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
 
         // Knows whether the app is visible, so tray notifications are only raised in the background
         AppForegroundTracker.register(application)
+        DeviceIdentity.init(this)
         NotificationHelper.ensureChannel(this)
 
         // Mandatory App Check wiring with launch intent before any UI or Firebase operations
@@ -140,6 +142,11 @@ fun AppMainContent(
                 permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             }
         }
+    }
+
+    // Let the server know where to send pushes for this account (re-done on every start; tokens can change)
+    LaunchedEffect(taskFlowViewModel) {
+        taskFlowViewModel.registerForPush()
     }
 
     // Tray notifications for changes made elsewhere in shared projects while the app isn't visible.
