@@ -81,6 +81,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.AppForegroundTracker
 import com.example.ui.SoundEffectHelper
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -148,7 +149,10 @@ fun HomeScreen(
     // Play the "task done" sound when someone else completes a task on another device.
     LaunchedEffect(viewModel) {
         viewModel.remoteTaskCompleted.collect {
-            SoundEffectHelper.playTaskDone(context)
+            // In the background the system notification plays its own sound instead.
+            if (AppForegroundTracker.isInForeground) {
+                SoundEffectHelper.playTaskDone(context)
+            }
         }
     }
 

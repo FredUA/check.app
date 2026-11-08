@@ -3,6 +3,9 @@ package com.example
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +23,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.data.TaskFlowRepository
 import com.example.ui.components.DrawerContent
 import com.example.ui.components.ThreeDimensionalDrawerScaffold
+import com.example.ui.AppForegroundTracker
+import com.example.ui.NotificationHelper
 import com.example.ui.configureAppCheck
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.HomeScreen
@@ -39,6 +44,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Knows whether the app is visible, so tray notifications are only raised in the background
+        AppForegroundTracker.register(application)
+        NotificationHelper.ensureChannel(this)
 
         // Mandatory App Check wiring with launch intent before any UI or Firebase operations
         configureAppCheck(this, intent)
@@ -116,6 +125,38 @@ fun AppMainContent(
 ) {
     var isDrawerOpen by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") } // "home", "shared", "settings"
+
+    val context = LocalContext.current
+
+    // Ask for the notification permission once (Android 13+), right after sign-in.
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* result is read via NotificationHelper.canPost() when a notification is raised */ }
+    LaunchedEffect(Unit) {
+        if (NotificationHelper.needsRuntimePermission() && !NotificationHelper.canPost(context)) {
+            val prefs = context.getSharedPreferences("check_app_prefs", android.content.Context.MODE_PRIVATE)
+            if (!prefs.getBoolean("notification_permission_asked", false)) {
+                prefs.edit().putBoolean("notification_permission_asked", true).apply()
+                permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
+    // Tray notifications for tasks completed/reopened elsewhere while the app isn't visible.
+    // Collected here (not in a single screen) so it works from any screen.
+    LaunchedEffect(taskFlowViewModel) {
+        taskFlowViewModel.remoteTaskUpdates.collect { update ->
+            if (!AppForegroundTracker.isInForeground) {
+                NotificationHelper.showTaskUpdate(
+                    context = context,
+                    key = update.taskId,
+                    title = if (update.completed) "Task completed" else "Task reopened",
+                    text = if (update.completed) "${update.who} completed '${update.taskTitle}'"
+                    else "${update.who} reopened '${update.taskTitle}'"
+                )
+            }
+        }
+    }
 
     // BackHandler for responsive navigation
     BackHandler(enabled = isDrawerOpen || currentScreen != "home") {

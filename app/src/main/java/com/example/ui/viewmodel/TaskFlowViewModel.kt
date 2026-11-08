@@ -42,6 +42,14 @@ data class AppNotification(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+/** A task completed or reopened by someone else (another device or a collaborator). */
+data class RemoteTaskUpdate(
+    val taskId: String,
+    val taskTitle: String,
+    val who: String,
+    val completed: Boolean
+)
+
 class TaskFlowViewModel(
     private val repository: TaskFlowRepository
 ) : ViewModel() {
@@ -107,6 +115,10 @@ class TaskFlowViewModel(
     private val _remoteTaskCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val remoteTaskCompleted: SharedFlow<Unit> = _remoteTaskCompleted.asSharedFlow()
 
+    // One event per remotely completed/reopened task, used for system tray notifications.
+    private val _remoteTaskUpdates = MutableSharedFlow<RemoteTaskUpdate>(extraBufferCapacity = 16)
+    val remoteTaskUpdates: SharedFlow<RemoteTaskUpdate> = _remoteTaskUpdates.asSharedFlow()
+
     private fun markLocalCompletionChange(taskId: String, expectedCompleted: Boolean) {
         localCompletionChanges[taskId] = expectedCompleted to System.currentTimeMillis()
     }
@@ -145,6 +157,14 @@ class TaskFlowViewModel(
                 postNotification(
                     if (task.isCompleted) "✓ $who completed: '${task.title}'"
                     else "$who reopened: '${task.title}'"
+                )
+                _remoteTaskUpdates.emit(
+                    RemoteTaskUpdate(
+                        taskId = task.id,
+                        taskTitle = task.title,
+                        who = who,
+                        completed = task.isCompleted
+                    )
                 )
             }
         }
