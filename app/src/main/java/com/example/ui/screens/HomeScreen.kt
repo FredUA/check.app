@@ -94,6 +94,7 @@ import com.example.ui.components.CategoryCard
 import com.example.ui.components.QuickAddTaskRowItem
 import com.example.ui.components.SpeedDialFab
 import com.example.ui.components.SwipeToDeleteBox
+import com.example.ui.components.highlightNotificationKeywords
 import com.example.ui.components.TaskRowItem
 import com.example.ui.dialogs.CreateListDialog
 import com.example.ui.dialogs.CreateProjectDialog
@@ -865,7 +866,7 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Text(
-                        text = floatingBanner.orEmpty(),
+                        text = highlightNotificationKeywords(floatingBanner.orEmpty()),
                         color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium,
