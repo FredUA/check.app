@@ -145,6 +145,13 @@ fun HomeScreen(
     var showSortMenu by remember { mutableStateOf(false) }
     var showNotificationsPopover by remember { mutableStateOf(false) }
 
+    // Play the "task done" sound when someone else completes a task on another device.
+    LaunchedEffect(viewModel) {
+        viewModel.remoteTaskCompleted.collect {
+            SoundEffectHelper.playTaskDone(context)
+        }
+    }
+
     val bellRotation = remember { Animatable(0f) }
     LaunchedEffect(notifications.size) {
         if (notifications.isNotEmpty()) {

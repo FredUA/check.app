@@ -14,9 +14,12 @@ import com.example.ui.theme.NeonBlue
 import com.example.ui.theme.NeonGreen
 import com.example.ui.theme.NeonPink
 import com.example.ui.theme.NeonPurple
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -100,6 +103,10 @@ class TaskFlowViewModel(
     private val localCompletionChanges = mutableMapOf<String, Pair<Boolean, Long>>()
     private var previousTaskStates: Map<String, TaskItem>? = null
 
+    // Fired when a task was marked completed by another device / collaborator, so the UI can play the sound.
+    private val _remoteTaskCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val remoteTaskCompleted: SharedFlow<Unit> = _remoteTaskCompleted.asSharedFlow()
+
     private fun markLocalCompletionChange(taskId: String, expectedCompleted: Boolean) {
         localCompletionChanges[taskId] = expectedCompleted to System.currentTimeMillis()
     }
@@ -129,6 +136,8 @@ class TaskFlowViewModel(
             remoteChanges.add(task)
         }
         if (remoteChanges.isEmpty()) return
+        // One sound per update, even if several tasks changed at once; only for completion, not reopen.
+        if (remoteChanges.any { it.isCompleted }) _remoteTaskCompleted.tryEmit(Unit)
         viewModelScope.launch {
             for (task in remoteChanges) {
                 val who = if (task.lastUpdatedBy.isBlank()) "Someone"
