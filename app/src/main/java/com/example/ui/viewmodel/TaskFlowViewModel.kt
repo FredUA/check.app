@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 private const val TAG = "TaskFlowViewModel"
+private const val LOCAL_CHANGE_WINDOW_MS = 15_000L
 
 enum class SortOption(val displayName: String) {
     DATE_NEWEST("Newest first"),
@@ -88,6 +89,58 @@ class TaskFlowViewModel(
             kotlinx.coroutines.delay(3500)
             if (_floatingBanner.value == message) {
                 _floatingBanner.value = null
+            }
+        }
+    }
+
+    // --- Notifications for changes made on other devices / by collaborators ---
+
+    // Completion changes this device made itself: taskId -> (expected isCompleted, mark time).
+    // They already post their own notification, so the snapshot diff below must skip them.
+    private val localCompletionChanges = mutableMapOf<String, Pair<Boolean, Long>>()
+    private var previousTaskStates: Map<String, TaskItem>? = null
+
+    private fun markLocalCompletionChange(taskId: String, expectedCompleted: Boolean) {
+        localCompletionChanges[taskId] = expectedCompleted to System.currentTimeMillis()
+    }
+
+    private fun consumeLocalCompletionChange(taskId: String, nowCompleted: Boolean): Boolean {
+        val (expected, markedAt) = localCompletionChanges[taskId] ?: return false
+        val fresh = System.currentTimeMillis() - markedAt < LOCAL_CHANGE_WINDOW_MS
+        if (fresh && expected == nowCompleted) {
+            localCompletionChanges.remove(taskId)
+            return true
+        }
+        if (!fresh) localCompletionChanges.remove(taskId)
+        return false
+    }
+
+    private fun announceRemoteCompletionChanges(tasks: List<TaskItem>) {
+        val current = tasks.associateBy { it.id }
+        val previous = previousTaskStates
+        previousTaskStates = current
+        // First snapshot is only the baseline.
+        if (previous == null) return
+        for ((id, task) in current) {
+            val before = previous[id] ?: continue
+            if (before.isCompleted == task.isCompleted) continue
+            if (consumeLocalCompletionChange(id, task.isCompleted)) continue
+            val who = task.lastUpdatedBy.ifBlank { "Someone" }
+            postNotification(
+                if (task.isCompleted) "✓ $who completed: '${task.title}'"
+                else "$who reopened: '${task.title}'"
+            )
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            try {
+                allTasks.collect { announceRemoteCompletionChanges(it) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Remote task change watcher stopped", e)
             }
         }
     }
@@ -212,6 +265,10 @@ class TaskFlowViewModel(
 
     fun updateTask(task: TaskItem) {
         viewModelScope.launch {
+            val existing = allTasks.value.firstOrNull { it.id == task.id }
+            if (existing != null && existing.isCompleted != task.isCompleted) {
+                markLocalCompletionChange(task.id, task.isCompleted)
+            }
             try {
                 repository.updateTask(task)
             } catch (e: Exception) {
@@ -222,6 +279,8 @@ class TaskFlowViewModel(
 
     fun toggleTaskCompletion(task: TaskItem) {
         viewModelScope.launch {
+            // Mark before writing: Firestore delivers the local snapshot before the write completes.
+            markLocalCompletionChange(task.id, !task.isCompleted)
             try {
                 val nowCompleted = repository.toggleTaskCompletion(task)
                 val currentEmail = repository.currentUserEmail()
@@ -234,6 +293,7 @@ class TaskFlowViewModel(
                 }
                 postNotification(msg)
             } catch (e: Exception) {
+                localCompletionChanges.remove(task.id)
                 Log.e(TAG, "Failed to toggle task completion", e)
             }
         }
