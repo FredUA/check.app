@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -54,7 +55,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil.compose.AsyncImage
@@ -84,12 +91,39 @@ fun SettingsScreen(
     val context = LocalContext.current
     var firstName by remember(userProfile?.firstName) { mutableStateOf(userProfile?.firstName.orEmpty()) }
     var lastName by remember(userProfile?.lastName) { mutableStateOf(userProfile?.lastName.orEmpty()) }
-    var avatarUrl by remember(userProfile?.avatarUrl) { mutableStateOf(userProfile?.avatarUrl.orEmpty()) }
+    var avatarUrl by remember(userProfile?.avatarUrl) { mutableStateOf(AvatarImages.displayable(userProfile?.avatarUrl.orEmpty())) }
 
     val userEmail = Firebase.auth.currentUser?.email.orEmpty()
     val scrollState = rememberScrollState()
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
+    val scope = rememberCoroutineScope()
+    var uploading by remember { mutableStateOf(false) }
+    val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) {
+            uploading = true
+            scope.launch {
+                try {
+                    val jpeg = AvatarImages.prepareJpeg(context, uri)
+                    if (jpeg == null) {
+                        Toast.makeText(context, "Couldn't read this image", Toast.LENGTH_SHORT).show()
+                    } else {
+                        avatarUrl = AvatarImages.upload(jpeg)
+                    }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e("SettingsScreen", "Avatar upload failed", e)
+                    Toast.makeText(
+                        context,
+                        "Upload failed: ${e.localizedMessage ?: "unknown error"}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                uploading = false
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -160,7 +194,7 @@ fun SettingsScreen(
                 ) {
                     if (avatarUrl.isNotBlank()) {
                         AsyncImage(
-                            model = AvatarImages.model(avatarUrl),
+                            model = avatarUrl,
                             contentDescription = "Avatar Preview",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -175,41 +209,28 @@ fun SettingsScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-                Text("Select an Avatar", color = TextSecondary, fontSize = 13.sp)
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(
+                    onClick = {
+                        focusManager.clearFocus()
+                        pickImage.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                        )
+                    },
+                    enabled = !uploading,
+                    modifier = Modifier.fillMaxWidth().height(48.dp).testTag("upload_avatar_button"),
+                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceCardLight, contentColor = TextPrimary),
+                    shape = RoundedCornerShape(14.dp)
                 ) {
-                    AvatarImages.presets.forEach { url ->
-                        val isSelected = avatarUrl == url
-                        Box(
-                            modifier = Modifier
-                                .size(56.dp)
-                                .clip(CircleShape)
-                                .clickable {
-                                    focusManager.clearFocus()
-                                    avatarUrl = url
-                                }
-                                .then(
-                                    if (isSelected) Modifier.border(2.5.dp, NeonPink, CircleShape)
-                                    else Modifier.border(1.dp, SurfaceCardBorder, CircleShape)
-                                )
-                        ) {
-                            AsyncImage(
-                                model = AvatarImages.model(url),
-                                contentDescription = "Preset Avatar",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        }
-                    }
+                    Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (uploading) "Uploading..." else "Upload image", fontWeight = FontWeight.SemiBold)
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
                 OutlinedTextField(
-                    value = avatarUrl,
+                    // Pictures uploaded by an earlier version were stored inline; no point showing that text.
+                    value = if (avatarUrl.startsWith("data:")) "" else avatarUrl,
                     onValueChange = { avatarUrl = it },
                     label = { Text("Or paste image URL") },
                     singleLine = true,

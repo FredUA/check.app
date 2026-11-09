@@ -1,30 +1,75 @@
 package com.example.ui
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import com.example.R
+import android.util.Log
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.storage.FirebaseStorage
+import com.google.firebase.storage.StorageMetadata
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 
 /**
- * Built-in avatars. They are stored in the profile as "avatar:N" and drawn from the app's own
- * drawables, so they work offline and need no image hosting. Anything else is treated as an image URL.
+ * Profile pictures. A picked image is shrunk to a small square JPEG and uploaded to Firebase Storage
+ * (`avatars/<uid>/<time>.jpg`); the profile only keeps the download URL. Anything else in the avatar
+ * field is a plain image URL.
  */
 object AvatarImages {
-    private const val PREFIX = "avatar:"
+    private const val SIZE_PX = 512
+    private const val JPEG_QUALITY = 85
 
-    private val drawables = mapOf(
-        "${PREFIX}1" to R.drawable.avatar_hero_1,
-        "${PREFIX}2" to R.drawable.avatar_hero_2,
-        "${PREFIX}3" to R.drawable.avatar_hero_3,
-        "${PREFIX}4" to R.drawable.avatar_hero_4
-    )
+    /** Values from the removed built-in avatars ("avatar:N") no longer point to anything. */
+    fun displayable(value: String): String = if (value.startsWith("avatar:")) "" else value
 
-    val presets: List<String> = drawables.keys.toList()
+    /** Reads the picked image, crops it to a centred square, scales it down and encodes it. Null on failure. */
+    suspend fun prepareJpeg(context: Context, uri: Uri): ByteArray? = withContext(Dispatchers.IO) {
+        try {
+            val resolver = context.contentResolver
 
-    /** What to hand to Coil's `AsyncImage` for a stored avatar value. */
-    fun model(value: String): Any = drawables[value.trim()] ?: value
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@withContext null
+
+            var sample = 1
+            while (bounds.outWidth / (sample * 2) >= SIZE_PX && bounds.outHeight / (sample * 2) >= SIZE_PX) sample *= 2
+            val decoded = resolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample })
+            } ?: return@withContext null
+
+            val side = minOf(decoded.width, decoded.height)
+            val square = Bitmap.createBitmap(
+                decoded, (decoded.width - side) / 2, (decoded.height - side) / 2, side, side
+            )
+            val scaled = if (side > SIZE_PX) Bitmap.createScaledBitmap(square, SIZE_PX, SIZE_PX, true) else square
+
+            val out = ByteArrayOutputStream()
+            scaled.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
+            out.toByteArray()
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not prepare the picked image", e)
+            null
+        }
+    }
+
+    /** Uploads the picture for the signed-in user and returns its download URL. Throws on failure. */
+    suspend fun upload(jpeg: ByteArray): String {
+        val uid = Firebase.auth.currentUser?.uid ?: throw IllegalStateException("Not signed in")
+        val ref = FirebaseStorage.getInstance().reference
+            .child("avatars/$uid/${System.currentTimeMillis()}.jpg")
+        ref.putBytes(jpeg, StorageMetadata.Builder().setContentType("image/jpeg").build()).await()
+        return ref.downloadUrl.await().toString()
+    }
+
+    private const val TAG = "AvatarImages"
 }
 
 /** A short, light buzz, e.g. to confirm that something was saved. */
