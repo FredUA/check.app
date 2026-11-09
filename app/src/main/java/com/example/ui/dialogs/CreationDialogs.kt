@@ -443,7 +443,7 @@ fun ShareEntityDialog(
 ) {
     var emailInput by remember { mutableStateOf("") }
     val context = LocalContext.current
-    val shareLink = "https://checkapp.page.link/open?type=$entityType&id=$entityId"
+    val shareLink = com.example.ui.ShareLinks.projectLink(entityId)
 
     AlertDialog(
         onDismissRequest = onDismiss,

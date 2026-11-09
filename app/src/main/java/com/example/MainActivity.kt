@@ -27,6 +27,7 @@ import com.example.ui.components.ThreeDimensionalDrawerScaffold
 import com.example.data.DeviceIdentity
 import com.example.ui.AppForegroundTracker
 import com.example.ui.NotificationHelper
+import com.example.ui.ShareLinks
 import com.example.ui.configureAppCheck
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.HomeScreen
@@ -51,6 +52,9 @@ class MainActivity : ComponentActivity() {
 
     /** Set when the home-screen widget asks for the "New list" dialog of a project. */
     private var newListProjectId by mutableStateOf<String?>(null)
+
+    /** Set when the app was opened from a project share link. */
+    private var linkedProjectId by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,7 +127,9 @@ class MainActivity : ComponentActivity() {
                             userProfile = profile,
                             userEmail = userEmail,
                             newListProjectId = newListProjectId,
-                            onNewListHandled = { newListProjectId = null }
+                            onNewListHandled = { newListProjectId = null },
+                            linkedProjectId = linkedProjectId,
+                            onLinkedProjectHandled = { linkedProjectId = null }
                         )
                     }
                 }
@@ -148,6 +154,10 @@ class MainActivity : ComponentActivity() {
         if (intent?.action == WidgetIntents.ACTION_NEW_LIST) {
             newListProjectId = intent.getStringExtra(WidgetIntents.EXTRA_PROJECT_ID)
         }
+        // A share link: remembered until the user is signed in and the project can be opened.
+        if (intent?.action == Intent.ACTION_VIEW) {
+            ShareLinks.projectIdFrom(intent.data)?.let { linkedProjectId = it }
+        }
     }
 }
 
@@ -158,10 +168,29 @@ fun AppMainContent(
     userProfile: com.example.data.model.UserProfile?,
     userEmail: String,
     newListProjectId: String? = null,
-    onNewListHandled: () -> Unit = {}
+    onNewListHandled: () -> Unit = {},
+    linkedProjectId: String? = null,
+    onLinkedProjectHandled: () -> Unit = {}
 ) {
     var isDrawerOpen by remember { mutableStateOf(false) }
     var currentScreen by remember { mutableStateOf("home") } // "home", "shared", "settings"
+
+    // A project share link: go home and select that project (or say there's no access).
+    val linkContext = LocalContext.current
+    LaunchedEffect(linkedProjectId, checkAppViewModel) {
+        val projectId = linkedProjectId ?: return@LaunchedEffect
+        currentScreen = "home"
+        isDrawerOpen = false
+        val opened = checkAppViewModel.openProjectFromLink(projectId)
+        if (!opened) {
+            android.widget.Toast.makeText(
+                linkContext,
+                "You don't have access to this project. Ask the owner to invite your email.",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+        onLinkedProjectHandled()
+    }
 
     // The widget's "New list" button: go to the home screen, where the dialog opens.
     LaunchedEffect(newListProjectId) {

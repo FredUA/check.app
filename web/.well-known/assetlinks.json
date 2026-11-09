@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.kostia.check.app",
+      "sha256_cert_fingerprints": [
+        "83:D9:57:46:17:92:FE:B7:AB:47:69:D5:69:1B:AB:C0:26:33:D9:18:AA:63:91:21:71:B7:C9:C4:F8:19:F0:F6"
+      ]
+    }
+  }
+]

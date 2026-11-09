@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#283E7A">
+  <title>check.app invitation</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: #283E7A; color: #fff; padding: 24px;
+    }
+    main { width: 100%; max-width: 380px; text-align: center; }
+    svg { width: 120px; height: 120px; }
+    h1 { font-size: 24px; margin: 8px 0 8px; }
+    p { color: #C9D2FF; line-height: 1.5; margin: 0 0 24px; }
+    a.btn {
+      display: block; padding: 15px 20px; border-radius: 14px; background: #FF2A85; color: #fff;
+      font-weight: 700; text-decoration: none; font-size: 16px;
+    }
+    small { display: block; margin-top: 22px; color: #9AA8E8; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <main>
+    <svg viewBox="0 0 108 108" aria-hidden="true">
+      <defs>
+        <linearGradient id="g" gradientUnits="userSpaceOnUse" x1="32" y1="72" x2="78" y2="36">
+          <stop offset="0" stop-color="#00D2FF"/><stop offset="1" stop-color="#FF2A85"/>
+        </linearGradient>
+      </defs>
+      <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M34,56 L48,70 L76,38" stroke="url(#g)" stroke-opacity=".28" stroke-width="22"/>
+        <path d="M34,56 L48,70 L76,38" stroke="url(#g)" stroke-width="10"/>
+        <path d="M34,56 L48,70 L76,38" stroke="#fff" stroke-opacity=".85" stroke-width="3"/>
+      </g>
+    </svg>
+    <h1>You're invited to a project</h1>
+    <p>Open this link on a phone with check.app installed to jump straight into the shared project.</p>
+    <a class="btn" id="open" href="#">Open in check.app</a>
+    <small>
+      Nothing happens? Make sure check.app is installed and that you are signed in with the email address
+      the invitation was sent to.
+    </small>
+  </main>
+  <script>
+    // Link looks like https://<host>/p/<projectId>; the button uses the custom scheme as a fallback.
+    var parts = location.pathname.split('/').filter(Boolean);
+    var id = parts[0] === 'p' && parts[1] ? parts[1] : '';
+    document.getElementById('open').href = id
+      ? 'intent://open?project=' + encodeURIComponent(id) +
+        '#Intent;scheme=checkapp;package=com.kostia.check.app;end'
+      : '#';
+  </script>
+</body>
+</html>

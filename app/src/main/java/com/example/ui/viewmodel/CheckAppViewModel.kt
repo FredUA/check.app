@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -457,6 +458,21 @@ class CheckAppViewModel(
     fun selectProject(projectId: String?) {
         _selectedProjectId.value = if (_selectedProjectId.value == projectId) null else projectId
         _selectedListId.value = null
+    }
+
+    /**
+     * Opens the project a share link points to. Waits a moment for the project to show up among the
+     * ones this user can access (it arrives from the server if they were just invited).
+     * Returns false when they have no access to it.
+     */
+    suspend fun openProjectFromLink(projectId: String): Boolean {
+        val found = kotlinx.coroutines.withTimeoutOrNull(8_000) {
+            repository.observeAccessibleProjects().first { list -> list.any { it.id == projectId } }
+        }
+        if (found == null) return false
+        _selectedProjectId.value = projectId
+        _selectedListId.value = null
+        return true
     }
 
     /** Shows exactly this list (and its project), without the toggle-off behaviour of the two selectors above. */
