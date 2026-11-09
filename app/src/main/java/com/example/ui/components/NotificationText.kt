@@ -7,10 +7,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 
-private val KEYWORD_REGEX = Regex("\\b(subtask|task|list|project)s?\\b", RegexOption.IGNORE_CASE)
+private val KEYWORD_REGEX = Regex("\\b(task|list|project)s?\\b", RegexOption.IGNORE_CASE)
 
 /**
- * Makes the thing a notification is about stand out: the words Task / List / Project (and Subtask)
+ * Makes the thing a notification is about stand out: the words Task / List / Project
  * are capitalised, bold and underlined.
  *
  * Only the part before the first quote is looked at: messages put the user's own titles in

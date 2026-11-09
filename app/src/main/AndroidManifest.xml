@@ -72,7 +72,7 @@
 
         <!-- Push notifications (FCM) about changes in shared projects -->
         <service
-            android:name=".push.TaskFlowMessagingService"
+            android:name=".push.CheckAppMessagingService"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />

@@ -4,9 +4,8 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.TaskFlowRepository
+import com.example.data.CheckAppRepository
 import com.example.data.model.Project
-import com.example.data.model.Subtask
 import com.example.data.model.TaskItem
 import com.example.data.model.TaskList
 import com.example.ui.theme.NeonAmber
@@ -26,7 +25,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
-private const val TAG = "TaskFlowViewModel"
+private const val TAG = "CheckAppViewModel"
 
 // A list not seen before counts as "just created" if it was created within this long (server time).
 private const val NEW_LIST_WINDOW_MS = 120_000L
@@ -58,8 +57,8 @@ data class RemoteEvent(
     val trayText: String
 )
 
-class TaskFlowViewModel(
-    private val repository: TaskFlowRepository
+class CheckAppViewModel(
+    private val repository: CheckAppRepository
 ) : ViewModel() {
 
     val projects: StateFlow<List<Project>> = repository.observeProjects()
@@ -594,47 +593,6 @@ class TaskFlowViewModel(
                 postNotificationIfShared(msg, task.projectId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to toggle task completion", e)
-            }
-        }
-    }
-
-    fun addSubtask(task: TaskItem, title: String) {
-        viewModelScope.launch {
-            try {
-                repository.addSubtask(task, title)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to add subtask", e)
-            }
-        }
-    }
-
-    fun toggleSubtask(task: TaskItem, subtaskId: String) {
-        viewModelScope.launch {
-            try {
-                repository.toggleSubtaskCompletion(task, subtaskId)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to toggle subtask", e)
-            }
-        }
-    }
-
-    fun deleteSubtask(task: TaskItem, subtaskId: String) {
-        viewModelScope.launch {
-            try {
-                repository.deleteSubtask(task, subtaskId)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to delete subtask", e)
-            }
-        }
-    }
-
-    fun promoteSubtaskToTask(task: TaskItem, subtask: Subtask) {
-        viewModelScope.launch {
-            try {
-                repository.promoteSubtaskToTask(task, subtask)
-                postNotificationIfShared("Promoted subtask '${subtask.title}' to a task!", task.projectId)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to promote subtask", e)
             }
         }
     }

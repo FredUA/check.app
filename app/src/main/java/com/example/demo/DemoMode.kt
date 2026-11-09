@@ -1,8 +1,7 @@
 package com.example.demo
 
-import com.example.data.TaskFlowRepository
+import com.example.data.CheckAppRepository
 import com.example.data.model.Project
-import com.example.data.model.Subtask
 import com.example.data.model.TaskItem
 import com.example.data.model.TaskList
 import com.example.data.model.UserProfile
@@ -245,41 +244,6 @@ object DemoMode {
         )
         updateTask(updated)
         return nextCompleted
-    }
-
-    fun addSubtask(task: TaskItem, title: String) {
-        val newSub = mapOf(
-            "id" to "sub_${UUID.randomUUID().toString().take(6)}",
-            "title" to title.trim(),
-            "isCompleted" to false
-        )
-        val updated = task.copy(subtasks = task.subtasks + newSub)
-        updateTask(updated)
-    }
-
-    fun toggleSubtask(task: TaskItem, subtaskId: String) {
-        val updatedSubtasks = task.subtasks.map { map ->
-            if (map["id"] == subtaskId) {
-                val current = map["isCompleted"] as? Boolean ?: false
-                map.toMutableMap().apply { put("isCompleted", !current) }
-            } else map
-        }
-        updateTask(task.copy(subtasks = updatedSubtasks))
-    }
-
-    fun deleteSubtask(task: TaskItem, subtaskId: String) {
-        val updatedSubtasks = task.subtasks.filterNot { it["id"] == subtaskId }
-        updateTask(task.copy(subtasks = updatedSubtasks))
-    }
-
-    fun promoteSubtaskToTask(task: TaskItem, subtask: Subtask): String {
-        deleteSubtask(task, subtask.id)
-        return createTask(
-            listId = task.listId,
-            projectId = task.projectId,
-            title = subtask.title,
-            notes = "Promoted from subtask of '${task.title}'"
-        )
     }
 
     fun reassignTask(task: TaskItem, targetListId: String, targetProjectId: String) {

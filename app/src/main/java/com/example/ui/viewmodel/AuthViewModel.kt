@@ -11,7 +11,7 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.R
-import com.example.data.TaskFlowRepository
+import com.example.data.CheckAppRepository
 import com.example.data.model.UserProfile
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
@@ -38,7 +38,7 @@ sealed interface AuthUiState {
 }
 
 class AuthViewModel(
-    private val repository: TaskFlowRepository
+    private val repository: CheckAppRepository
 ) : ViewModel() {
 
     private val auth = Firebase.auth

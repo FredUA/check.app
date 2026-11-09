@@ -2,7 +2,7 @@ package com.example.push
 
 import android.util.Log
 import com.example.data.DeviceIdentity
-import com.example.data.TaskFlowRepository
+import com.example.data.CheckAppRepository
 import com.example.ui.AppForegroundTracker
 import com.example.ui.NotificationHelper
 import com.google.firebase.auth.FirebaseAuth
@@ -18,7 +18,7 @@ import kotlinx.coroutines.launch
  * The pushes are data-only, so this runs whether the app is in the background or not running at all,
  * and the notification looks the same as the ones the app raises itself.
  */
-class TaskFlowMessagingService : FirebaseMessagingService() {
+class CheckAppMessagingService : FirebaseMessagingService() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -26,7 +26,7 @@ class TaskFlowMessagingService : FirebaseMessagingService() {
         DeviceIdentity.init(applicationContext)
         scope.launch {
             try {
-                TaskFlowRepository(applicationContext).registerDevice(token)
+                CheckAppRepository(applicationContext).registerDevice(token)
             } catch (e: Exception) {
                 Log.w(TAG, "Could not store the new push token", e)
             }
@@ -52,6 +52,6 @@ class TaskFlowMessagingService : FirebaseMessagingService() {
     }
 
     private companion object {
-        const val TAG = "TaskFlowMessaging"
+        const val TAG = "CheckAppMessaging"
     }
 }

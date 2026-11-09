@@ -117,14 +117,14 @@ import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.SortOption
-import com.example.ui.viewmodel.TaskFlowViewModel
+import com.example.ui.viewmodel.CheckAppViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     userProfile: UserProfile?,
     userEmail: String,
-    viewModel: TaskFlowViewModel,
+    viewModel: CheckAppViewModel,
     onOpenDrawer: () -> Unit,
     // Set when the home-screen widget's "New list" button opened the app: the project to attach the list to.
     newListProjectId: String? = null,

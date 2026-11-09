@@ -1,5 +1,8 @@
 package com.example.ui.dialogs
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -254,6 +257,7 @@ fun TaskDetailDialog(
                         value = title,
                         onValueChange = { title = it },
                         label = { Text("Task Title") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
                             unfocusedTextColor = TextPrimary,
@@ -271,6 +275,7 @@ fun TaskDetailDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Description & Notes (Optional)") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     minLines = 3,
                     maxLines = 5,
                     colors = OutlinedTextFieldDefaults.colors(

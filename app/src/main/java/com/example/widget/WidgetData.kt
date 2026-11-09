@@ -3,7 +3,7 @@ package com.example.widget
 import android.content.Context
 import android.util.Log
 import com.example.data.DeviceIdentity
-import com.example.data.TaskFlowRepository
+import com.example.data.CheckAppRepository
 import com.example.data.model.Project
 import com.example.data.model.TaskList
 import com.example.ui.configureAppCheck
@@ -148,7 +148,7 @@ object WidgetDataSource {
         }
     }
 
-    private fun repository(context: Context) = TaskFlowRepository(context.applicationContext)
+    private fun repository(context: Context) = CheckAppRepository(context.applicationContext)
 
     fun isSignedIn(context: Context): Boolean {
         ensureInit(context)

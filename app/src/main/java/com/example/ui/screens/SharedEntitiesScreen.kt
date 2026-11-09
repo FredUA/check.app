@@ -53,11 +53,11 @@ import com.example.ui.theme.SurfaceCardLight
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.viewmodel.SortOption
-import com.example.ui.viewmodel.TaskFlowViewModel
+import com.example.ui.viewmodel.CheckAppViewModel
 
 @Composable
 fun SharedEntitiesScreen(
-    viewModel: TaskFlowViewModel,
+    viewModel: CheckAppViewModel,
     onBack: () -> Unit
 ) {
     val sharedProjects by viewModel.sharedProjects.collectAsState()

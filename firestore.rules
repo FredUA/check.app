@@ -60,7 +60,6 @@ service cloud.firestore {
         (!('notes' in data) || data.notes is string) &&
         (!('isCompleted' in data) || data.isCompleted is bool) &&
         (!('completed' in data) || data.completed is bool) &&
-        (!('subtasks' in data) || data.subtasks is list) &&
         (!('memberEmails' in data) || data.memberEmails is list) &&
         (!('lastUpdatedBy' in data) || data.lastUpdatedBy is string);
     }

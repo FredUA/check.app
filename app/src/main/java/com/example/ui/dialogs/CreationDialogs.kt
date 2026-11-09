@@ -1,5 +1,8 @@
 package com.example.ui.dialogs
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
@@ -105,6 +108,7 @@ fun CreateProjectDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Project Title") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -119,6 +123,7 @@ fun CreateProjectDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Description (Optional)") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
@@ -245,6 +250,7 @@ fun CreateListDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("List Title") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -378,6 +384,7 @@ fun CreateTaskDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Task Title") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -393,6 +400,7 @@ fun CreateTaskDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Notes (Optional)") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
@@ -469,6 +477,7 @@ fun ShareEntityDialog(
                         value = emailInput,
                         onValueChange = { emailInput = it },
                         label = { Text("Collaborator Email") },
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false, keyboardType = KeyboardType.Email),
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedTextColor = TextPrimary,
@@ -614,6 +623,7 @@ fun EditProjectDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("Project Title") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
@@ -628,6 +638,7 @@ fun EditProjectDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Description (Optional)") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,
                         unfocusedTextColor = TextPrimary,
@@ -811,6 +822,7 @@ fun EditListDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("List Name") },
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedTextColor = TextPrimary,

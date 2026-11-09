@@ -48,7 +48,7 @@
     },
     "TaskItem": {
       "title": "TaskItem",
-      "description": "Task item with subtasks and list assignment",
+      "description": "Task item with list assignment",
       "type": "object",
       "properties": {
         "listId": { "type": "string" },
@@ -58,7 +58,6 @@
         "notes": { "type": "string" },
         "isCompleted": { "type": "boolean" },
         "completedAt": { "type": "string", "format": "date-time" },
-        "subtasks": { "type": "array" },
         "memberEmails": { "type": "array" },
         "lastUpdatedBy": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
@@ -82,7 +81,7 @@
     },
     "/tasks/{taskId}": {
       "schema": "TaskItem",
-      "description": "Tasks with subtasks and completion status"
+      "description": "Tasks with completion status"
     }
   }
 }

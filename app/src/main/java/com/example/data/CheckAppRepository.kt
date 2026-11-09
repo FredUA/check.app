@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import com.example.R
 import com.example.data.model.Project
-import com.example.data.model.Subtask
 import com.example.data.model.TaskItem
 import com.example.data.model.TaskList
 import com.example.data.model.UserProfile
@@ -31,7 +30,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 
-class TaskFlowRepository(private val db: FirebaseFirestore) {
+class CheckAppRepository(private val db: FirebaseFirestore) {
 
     constructor(context: Context) : this(
         FirebaseFirestore.getInstance(
@@ -102,7 +101,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w("TaskFlowRepository", "Could not resolve display name for $key", e)
+            Log.w("CheckAppRepository", "Could not resolve display name for $key", e)
             key
         }
     }
@@ -146,7 +145,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             throw e
         } catch (e: Exception) {
             // Can't tell whether a profile exists; overwriting a possibly edited one would be worse.
-            Log.w("TaskFlowRepository", "Could not check for an existing profile", e)
+            Log.w("CheckAppRepository", "Could not check for an existing profile", e)
             return
         }
         if (!exists) saveUserProfile(profile, isNew = true)
@@ -421,7 +420,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 .snapshots(metadataChanges)
                 .map { snapshot -> listsFromSnapshot(snapshot, projectId) }
                 .catch { e ->
-                    Log.e("TaskFlowRepository", "observeLists failed for project $projectId", e)
+                    Log.e("CheckAppRepository", "observeLists failed for project $projectId", e)
                     emit(emptyList())
                 }
         }
@@ -434,7 +433,7 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                         .snapshots(metadataChanges)
                         .map { snapshot -> listsFromSnapshot(snapshot, project.id) }
                         .catch { e ->
-                            Log.e("TaskFlowRepository", "observeLists failed for project ${project.id}", e)
+                            Log.e("CheckAppRepository", "observeLists failed for project ${project.id}", e)
                             emit(emptyList())
                         }
                 }) { listsArray ->
@@ -577,7 +576,6 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             "notes" to notes.trim(),
             "isCompleted" to false,
             "completed" to false,
-            "subtasks" to emptyList<Map<String, Any>>(),
             "lastUpdatedBy" to currentEmail,
             "createdAt" to Timestamp.now(),
             "updatedAt" to Timestamp.now()
@@ -611,7 +609,6 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
                 "tasks.${task.id}.notes", task.notes.trim(),
                 "tasks.${task.id}.isCompleted", task.isCompleted,
                 "tasks.${task.id}.completed", task.isCompleted,
-                "tasks.${task.id}.subtasks", task.subtasks,
                 "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
                 "tasks.${task.id}.updatedAt", Timestamp.now(),
                 "lastUpdatedBy", currentUserEmail(),
@@ -651,103 +648,6 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
             handleFirestoreError(e, OperationType.UPDATE, listRef.path)
             throw e
         }
-    }
-
-    suspend fun addSubtask(task: TaskItem, subtaskTitle: String) {
-        if (DemoMode.isDemoActive.value) {
-            DemoMode.addSubtask(task, subtaskTitle)
-            return
-        }
-        val newSubtask = mapOf(
-            "id" to "sub_${UUID.randomUUID().toString().take(6)}",
-            "title" to subtaskTitle.trim(),
-            "isCompleted" to false
-        )
-        val updatedSubtasks = task.subtasks + newSubtask
-        val listRef = db.collection("projects").document(task.projectId).collection("lists").document(task.listId)
-        try {
-            listRef.update(
-                "tasks.${task.id}.subtasks", updatedSubtasks,
-                "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
-                "tasks.${task.id}.updatedAt", Timestamp.now(),
-                "lastUpdatedBy", currentUserEmail(),
-                "lastUpdatedByDevice", DeviceIdentity.id,
-                "updatedAt", FieldValue.serverTimestamp()
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, listRef.path)
-            throw e
-        }
-    }
-
-    suspend fun toggleSubtaskCompletion(task: TaskItem, subtaskId: String) = toggleSubtask(task, subtaskId)
-
-    suspend fun toggleSubtask(task: TaskItem, subtaskId: String) {
-        if (DemoMode.isDemoActive.value) {
-            DemoMode.toggleSubtask(task, subtaskId)
-            return
-        }
-        val updatedSubtasks = task.subtasks.map { map ->
-            if (map["id"] == subtaskId) {
-                val current = map["isCompleted"] as? Boolean ?: false
-                map.toMutableMap().apply { put("isCompleted", !current) }
-            } else map
-        }
-        val listRef = db.collection("projects").document(task.projectId).collection("lists").document(task.listId)
-        try {
-            listRef.update(
-                "tasks.${task.id}.subtasks", updatedSubtasks,
-                "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
-                "tasks.${task.id}.updatedAt", Timestamp.now(),
-                "lastUpdatedBy", currentUserEmail(),
-                "lastUpdatedByDevice", DeviceIdentity.id,
-                "updatedAt", FieldValue.serverTimestamp()
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, listRef.path)
-            throw e
-        }
-    }
-
-    suspend fun deleteSubtask(task: TaskItem, subtaskId: String) {
-        if (DemoMode.isDemoActive.value) {
-            DemoMode.deleteSubtask(task, subtaskId)
-            return
-        }
-        val updatedSubtasks = task.subtasks.filterNot { it["id"] == subtaskId }
-        val listRef = db.collection("projects").document(task.projectId).collection("lists").document(task.listId)
-        try {
-            listRef.update(
-                "tasks.${task.id}.subtasks", updatedSubtasks,
-                "tasks.${task.id}.lastUpdatedBy", currentUserEmail(),
-                "tasks.${task.id}.updatedAt", Timestamp.now(),
-                "lastUpdatedBy", currentUserEmail(),
-                "lastUpdatedByDevice", DeviceIdentity.id,
-                "updatedAt", FieldValue.serverTimestamp()
-            ).await()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, listRef.path)
-            throw e
-        }
-    }
-
-    suspend fun promoteSubtaskToTask(task: TaskItem, subtask: Subtask): String {
-        if (DemoMode.isDemoActive.value) {
-            return DemoMode.promoteSubtaskToTask(task, subtask)
-        }
-        deleteSubtask(task, subtask.id)
-        return createTask(
-            listId = task.listId,
-            projectId = task.projectId,
-            title = subtask.title,
-            notes = "Promoted from subtask of '${task.title}'"
-        )
     }
 
     suspend fun reassignTaskToList(task: TaskItem, targetListId: String, targetProjectId: String) {
@@ -819,12 +719,12 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
     private fun handleFirestoreError(e: Throwable, operation: OperationType, path: String) {
         if (e is FirebaseFirestoreException && e.code == FirebaseFirestoreException.Code.PERMISSION_DENIED) {
             Log.e(
-                "TaskFlowRepo",
+                "CheckAppRepo",
                 "Firestore PERMISSION_DENIED on $operation at $path. Auth state: uid=${auth.currentUser?.uid}, email=${auth.currentUser?.email}",
                 e
             )
         } else {
-            Log.e("TaskFlowRepo", "Firestore error on $operation at $path: ${e.message}", e)
+            Log.e("CheckAppRepo", "Firestore error on $operation at $path: ${e.message}", e)
         }
     }
 
