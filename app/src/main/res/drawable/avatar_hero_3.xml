@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cat-ear shadow ninja, violet-heavy duotone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path android:pathData="M0,0h96v96h-96z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="0" android:startY="96"
+                android:endX="96" android:endY="0"
+                android:startColor="#FF0F1A44"
+                android:endColor="#FF5B2FBF" />
+        </aapt:attr>
+    </path>
+    <!-- moon -->
+    <path android:fillColor="#33C9D2FF" android:pathData="M72,24m-14,0a14,14 0,1 1,28 0a14,14 0,1 1,-28 0" />
+    <path android:fillColor="#FF5B2FBF" android:pathData="M78,20m-12,0a12,12 0,1 1,24 0a12,12 0,1 1,-24 0" />
+    <!-- shoulders -->
+    <path android:fillColor="#FF2B1A7A" android:pathData="M6,96L14,80Q30,72 48,74Q66,72 82,80L90,96Z" />
+    <!-- scarf -->
+    <path android:fillColor="#FF7B4DF0" android:pathData="M30,66Q48,78 66,66L70,76Q48,90 26,76Z" />
+    <path android:fillColor="#FF9A7BFF" android:pathData="M62,74L72,74L76,92L66,88Z" />
+    <!-- hood with cat ears -->
+    <path android:fillColor="#FF1B1160" android:pathData="M25,40L22,8L42,22Q48,20 54,22L74,8L71,40Q70,60 48,66Q26,60 25,40Z" />
+    <path android:fillColor="#FF7B4DF0" android:pathData="M28,30L27,15L38,23Z" />
+    <path android:fillColor="#FF7B4DF0" android:pathData="M68,30L69,15L58,23Z" />
+    <!-- face opening -->
+    <path android:fillColor="#FFC7BDFF" android:pathData="M48,50m-15,0a15,14 0,1 1,30 0a15,14 0,1 1,-30 0" />
+    <!-- eye band -->
+    <path android:fillColor="#FF120A3D" android:pathData="M31,41Q48,36 65,41L64,50Q48,46 32,50Z" />
+    <path android:fillColor="#FFE8ECFF" android:pathData="M36,43L45,44L44,48L37,47Z" />
+    <path android:fillColor="#FFE8ECFF" android:pathData="M60,43L51,44L52,48L59,47Z" />
+    <!-- nose and mouth -->
+    <path android:fillColor="#FF7B4DF0" android:pathData="M46,54L50,54L48,56.5Z" />
+    <path
+        android:pathData="M44,59Q48,62 52,59"
+        android:strokeColor="#FF5B2FBF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+</vector>

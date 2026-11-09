@@ -54,8 +54,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import coil.compose.AsyncImage
 import com.example.data.model.UserProfile
+import com.example.ui.AvatarImages
+import com.example.ui.lightVibrate
 import com.example.ui.theme.DeepMidnight
 import com.example.ui.theme.NeonBlue
 import com.example.ui.theme.NeonPink
@@ -70,13 +75,6 @@ import com.example.ui.viewmodel.AuthViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 
-val PRESET_AVATARS = listOf(
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop", // Olivia portrait from reference
-    "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop"
-)
-
 @Composable
 fun SettingsScreen(
     userProfile: UserProfile?,
@@ -90,6 +88,8 @@ fun SettingsScreen(
 
     val userEmail = Firebase.auth.currentUser?.email.orEmpty()
     val scrollState = rememberScrollState()
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
 
     Column(
         modifier = Modifier
@@ -97,6 +97,8 @@ fun SettingsScreen(
             .background(DeepMidnight)
             .statusBarsPadding()
             .navigationBarsPadding()
+            // Lift the content above the keyboard so the field being edited stays visible and scrollable.
+            .imePadding()
             .padding(horizontal = 20.dp)
             .verticalScroll(scrollState)
     ) {
@@ -158,7 +160,7 @@ fun SettingsScreen(
                 ) {
                     if (avatarUrl.isNotBlank()) {
                         AsyncImage(
-                            model = avatarUrl,
+                            model = AvatarImages.model(avatarUrl),
                             contentDescription = "Avatar Preview",
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -180,20 +182,23 @@ fun SettingsScreen(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    PRESET_AVATARS.forEach { url ->
+                    AvatarImages.presets.forEach { url ->
                         val isSelected = avatarUrl == url
                         Box(
                             modifier = Modifier
-                                .size(48.dp)
+                                .size(56.dp)
                                 .clip(CircleShape)
-                                .clickable { avatarUrl = url }
+                                .clickable {
+                                    focusManager.clearFocus()
+                                    avatarUrl = url
+                                }
                                 .then(
                                     if (isSelected) Modifier.border(2.5.dp, NeonPink, CircleShape)
                                     else Modifier.border(1.dp, SurfaceCardBorder, CircleShape)
                                 )
                         ) {
                             AsyncImage(
-                                model = url,
+                                model = AvatarImages.model(url),
                                 contentDescription = "Preset Avatar",
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
@@ -267,6 +272,10 @@ fun SettingsScreen(
                     onClick = {
                         authViewModel.updateProfile(firstName, lastName, avatarUrl)
                         Toast.makeText(context, "Profile updated successfully!", Toast.LENGTH_SHORT).show()
+                        // The edit is done: drop the cursor, hide the keyboard and confirm with a light buzz.
+                        focusManager.clearFocus()
+                        keyboard?.hide()
+                        lightVibrate(context)
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp).testTag("save_profile_button"),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonPink)

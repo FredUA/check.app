@@ -162,7 +162,8 @@ class AuthViewModel(
             lastName = lastName,
             avatarUrl = user.photoUrl?.toString().orEmpty()
         )
-        repository.saveUserProfile(profile)
+        // Only the first sign-in takes the data from Google; later ones keep what the user saved.
+        repository.createUserProfileIfMissing(profile)
     }
 
     fun updateProfile(firstName: String, lastName: String, avatarUrl: String) {

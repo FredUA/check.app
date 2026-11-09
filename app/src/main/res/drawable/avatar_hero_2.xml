@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Armored hero with a visor helmet, duotone navy / blue / violet. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="96"
+    android:viewportHeight="96">
+    <path android:pathData="M0,0h96v96h-96z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="96" android:startY="0"
+                android:endX="0" android:endY="96"
+                android:startColor="#FF2B3FB0"
+                android:endColor="#FF111A4A" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#335B7BFF" android:pathData="M48,46m-38,0a38,38 0,1 1,76 0a38,38 0,1 1,-76 0" />
+    <!-- armor shoulders -->
+    <path android:fillColor="#FF2B3A9A" android:pathData="M10,96L14,80Q30,72 48,74Q66,72 82,80L86,96Z" />
+    <path android:fillColor="#FF6B4DF0" android:pathData="M18,82m-11,0a11,10 0,1 1,22 0a11,10 0,1 1,-22 0" />
+    <path android:fillColor="#FF6B4DF0" android:pathData="M78,82m-11,0a11,10 0,1 1,22 0a11,10 0,1 1,-22 0" />
+    <path android:fillColor="#FF9A86FF" android:pathData="M13,79Q18,75 23,78Q18,77 13,79Z" />
+    <path android:fillColor="#FF9A86FF" android:pathData="M73,79Q78,75 83,78Q78,77 73,79Z" />
+    <!-- reactor -->
+    <path android:fillColor="#FF121C52" android:pathData="M48,87m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <path android:fillColor="#FFC9D2FF" android:pathData="M48,87m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0" />
+    <!-- neck -->
+    <path android:fillColor="#FF1B2663" android:pathData="M39,64L57,64L58,76L38,76Z" />
+    <!-- helmet -->
+    <path android:fillColor="#FF4C62E0" android:pathData="M48,42m-26,0a26,28 0,1 1,52 0a26,28 0,1 1,-52 0" />
+    <path android:fillColor="#FF3347B8" android:pathData="M22,46Q22,66 40,68L40,62Q28,60 28,46Z" />
+    <path android:fillColor="#FF3347B8" android:pathData="M74,46Q74,66 56,68L56,62Q68,60 68,46Z" />
+    <path
+        android:pathData="M48,14L48,30"
+        android:strokeColor="#FFA8B4FF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+    <!-- visor -->
+    <path android:fillColor="#FF121C52" android:pathData="M27,38Q27,29 37,29L59,29Q69,29 69,38L69,49Q69,56 61,56L35,56Q27,56 27,49Z" />
+    <path android:fillColor="#667B8CFF" android:pathData="M32,34L44,34L37,51L32,51Z" />
+    <!-- glowing eyes -->
+    <path android:fillColor="#FFC9D2FF" android:pathData="M36,41L45,41L45,45L36,45Z" />
+    <path android:fillColor="#FFC9D2FF" android:pathData="M51,41L60,41L60,45L51,45Z" />
+    <!-- chin vents -->
+    <path
+        android:pathData="M42,61L54,61M43,64L53,64"
+        android:strokeColor="#FF9A86FF"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round" />
+</vector>

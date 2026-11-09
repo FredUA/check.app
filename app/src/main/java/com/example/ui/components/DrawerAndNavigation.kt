@@ -135,7 +135,7 @@ fun DrawerContent(
             ) {
                 if (!userProfile?.avatarUrl.isNullOrBlank()) {
                     AsyncImage(
-                        model = userProfile?.avatarUrl,
+                        model = com.example.ui.AvatarImages.model(userProfile?.avatarUrl.orEmpty()),
                         contentDescription = "User Avatar",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop

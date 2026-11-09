@@ -132,21 +132,42 @@ class TaskFlowRepository(private val db: FirebaseFirestore) {
         db.collection("users").document(uid).collection("devices").document(DeviceIdentity.id).delete().await()
     }
 
-    suspend fun saveUserProfile(profile: UserProfile) {
+    /**
+     * Creates the profile from the Google account on the very first sign-in only. An existing profile
+     * (possibly edited by the user) is left untouched, so signing in again never resets the name or avatar.
+     */
+    suspend fun createUserProfileIfMissing(profile: UserProfile) {
+        if (DemoMode.isDemoActive.value) return
+        val uid = requireUserId()
+        val docRef = db.collection("users").document(uid)
+        val exists = try {
+            docRef.get().await().exists()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Can't tell whether a profile exists; overwriting a possibly edited one would be worse.
+            Log.w("TaskFlowRepository", "Could not check for an existing profile", e)
+            return
+        }
+        if (!exists) saveUserProfile(profile, isNew = true)
+    }
+
+    suspend fun saveUserProfile(profile: UserProfile, isNew: Boolean = false) {
         if (DemoMode.isDemoActive.value) return
         val uid = requireUserId()
         val docRef = db.collection("users").document(uid)
         try {
-            val payload = mapOf(
+            val payload = mutableMapOf<String, Any>(
                 "email" to (profile.email.ifBlank { currentUserEmail() }),
                 "displayName" to profile.displayName,
                 "firstName" to profile.firstName,
                 "lastName" to profile.lastName,
                 "avatarUrl" to profile.avatarUrl,
-                "createdAt" to (profile.createdAt ?: FieldValue.serverTimestamp()),
                 "updatedAt" to FieldValue.serverTimestamp()
             )
-            docRef.set(payload).await()
+            // Merge, so the creation time of an existing profile is kept.
+            if (isNew) payload["createdAt"] = FieldValue.serverTimestamp()
+            docRef.set(payload, com.google.firebase.firestore.SetOptions.merge()).await()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
