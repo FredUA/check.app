@@ -28,6 +28,20 @@ function memberEmailsOf(project) {
   return [...new Set(all)];
 }
 
+// A description quoted in an "edited" notification is cut to this many characters (same as in the app).
+const MAX_DESCRIPTION = 120;
+
+/**
+ * ", <new description>" to append to an "edited" text when the description is what changed, else "".
+ * Shown on one line, so line breaks are collapsed and a long description is cut.
+ */
+function descriptionSuffix(before, after) {
+  const now = String(after || '').trim();
+  if (String(before || '').trim() === now || !now) return '';
+  const oneLine = now.replace(/\s+/g, ' ');
+  return `, ${oneLine.length > MAX_DESCRIPTION ? `${oneLine.slice(0, MAX_DESCRIPTION).trimEnd()}…` : oneLine}`;
+}
+
 function tasksOf(list) {
   return list && list.tasks && typeof list.tasks === 'object' ? list.tasks : {};
 }
@@ -98,8 +112,8 @@ function listEvents({ listId, before, after, project }) {
     if (wasDone !== isDone) {
       events.push({
         key: `task:${id}`,
-        title: isDone ? 'Task completed' : 'Task reopened',
-        text: `{who} ${isDone ? 'completed' : 'reopened'} '${task.title || ''}'`,
+        title: isDone ? 'Task done' : 'Task reopened',
+        text: `{who} ${isDone ? 'marked done' : 'reopened'} '${task.title || ''}'`,
         actorEmail,
         actorDevice,
       });
@@ -109,7 +123,7 @@ function listEvents({ listId, before, after, project }) {
       events.push({
         key: `task:${id}`,
         title: 'Task edited',
-        text: `{who} edited '${task.title || ''}'`,
+        text: `{who} edited '${task.title || ''}'${descriptionSuffix(previous.notes, task.notes)}`,
         actorEmail,
         actorDevice,
       });
@@ -131,13 +145,26 @@ function listEvents({ listId, before, after, project }) {
   return events;
 }
 
-/** Events for an update of /projects/{id}: people being invited or removed. */
+/** Events for an update of /projects/{id}: its name or description edited, people being invited or removed. */
 function projectUpdateEvents({ projectId, before, after }) {
   const events = [];
   const was = new Set((before.memberEmails || []).map(lower));
   const now = new Set((after.memberEmails || []).map(lower));
   const title = nameOf(after) || 'Untitled project';
   const actorEmail = after.lastUpdatedBy || after.ownerEmail;
+
+  // (Not while it is being deleted: "project deleted" covers that.)
+  if (isShared(after) && !after.deleting &&
+      (nameOf(before).trim() !== nameOf(after).trim() ||
+       String(before.description || '').trim() !== String(after.description || '').trim())) {
+    events.push({
+      key: `project:${projectId}`,
+      title: 'Project edited',
+      text: `{who} edited '${title}'${descriptionSuffix(before.description, after.description)}`,
+      actorEmail,
+      actorDevice: after.lastUpdatedByDevice,
+    });
+  }
 
   const invited = [...now].filter((e) => !was.has(e));
   if (invited.length) {

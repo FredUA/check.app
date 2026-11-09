@@ -19,6 +19,7 @@ data class Project(
     val memberEmails: List<String> = emptyList(),
     val sharedWith: List<String> = emptyList(),
     val lastUpdatedBy: String = "",
+    val lastUpdatedByDevice: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null,
     @ServerTimestamp val updatedAt: Timestamp? = null,
     // Filled in by the repository from Firestore metadata (never stored): the snapshot may be a stale cache.

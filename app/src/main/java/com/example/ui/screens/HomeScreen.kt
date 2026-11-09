@@ -15,7 +15,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -896,6 +900,15 @@ fun HomeScreen(
                 .align(Alignment.TopCenter)
                 .padding(top = 58.dp, start = 20.dp, end = 20.dp)
         ) {
+            // Swipe the banner left or right to dismiss it; the cross dismisses it too; a tap opens the
+            // notifications list.
+            val bannerScope = rememberCoroutineScope()
+            val bannerOffset = remember { Animatable(0f) }
+            var bannerWidthPx by remember { mutableStateOf(0) }
+            LaunchedEffect(floatingBanner) {
+                // A new banner starts in place, even if the previous one was swiped away.
+                if (floatingBanner != null) bannerOffset.snapTo(0f)
+            }
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = SurfaceCardLight,
@@ -903,7 +916,37 @@ fun HomeScreen(
                 shadowElevation = 8.dp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { viewModel.dismissFloatingBanner() }
+                    .onSizeChanged { bannerWidthPx = it.width }
+                    .graphicsLayer {
+                        translationX = bannerOffset.value
+                        if (bannerWidthPx > 0) {
+                            alpha = (1f - kotlin.math.abs(bannerOffset.value) / bannerWidthPx).coerceIn(0f, 1f)
+                        }
+                    }
+                    .draggable(
+                        orientation = Orientation.Horizontal,
+                        state = rememberDraggableState { delta ->
+                            bannerScope.launch { bannerOffset.snapTo(bannerOffset.value + delta) }
+                        },
+                        onDragStopped = { velocity ->
+                            val offset = bannerOffset.value
+                            val farEnough = kotlin.math.abs(offset) > bannerWidthPx * 0.3f
+                            // A quick flick counts too, as long as it goes the way the banner was dragged.
+                            val flicked = kotlin.math.abs(velocity) > 1200f && velocity * offset > 0f
+                            if (farEnough || flicked) {
+                                val side = if (offset < 0f) -1f else 1f
+                                bannerOffset.animateTo(side * bannerWidthPx * 1.2f)
+                                viewModel.dismissFloatingBanner()
+                            } else {
+                                bannerOffset.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+                            }
+                        }
+                    )
+                    .clickable {
+                        viewModel.dismissFloatingBanner()
+                        showNotificationsPopover = true
+                    }
+                    .testTag("floating_banner")
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 11.dp),

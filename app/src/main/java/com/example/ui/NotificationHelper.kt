@@ -15,6 +15,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.example.MainActivity
 import com.example.R
+import com.example.ui.components.highlightNotificationKeywordsForTray
 
 /** System tray (notification shade) notifications about task changes made by others. */
 object NotificationHelper {
@@ -61,11 +62,12 @@ object NotificationHelper {
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            val styledText = highlightNotificationKeywordsForTray(text)
             val notification = NotificationCompat.Builder(appContext, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_task)
                 .setContentTitle(title)
-                .setContentText(text)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setContentText(styledText)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(styledText))
                 .setContentIntent(openApp)
                 .setAutoCancel(true)
                 .setOnlyAlertOnce(true)

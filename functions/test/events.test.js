@@ -55,7 +55,8 @@ test('task added, edited, completed, reopened, deleted', () => {
   assert.deepEqual(out.map((e) => e.title), ['Task edited']);
 
   out = ev.listEvents({ listId: 'l1', before: base, after: list({ t1: task({ isCompleted: true }) }), project: {} });
-  assert.deepEqual(out.map((e) => e.title), ['Task completed']);
+  assert.deepEqual(out.map((e) => e.title), ['Task done']);
+  assert.equal(out[0].text, "{who} marked done 'Milk'");
 
   out = ev.listEvents({
     listId: 'l1',
@@ -78,7 +79,7 @@ test('legacy "completed" field is understood', () => {
     after: list({ t1: { title: 'A', completed: true } }),
     project: {},
   });
-  assert.deepEqual(out.map((e) => e.title), ['Task completed']);
+  assert.deepEqual(out.map((e) => e.title), ['Task done']);
 });
 
 test('a write that changes nothing visible is silent', () => {
@@ -100,8 +101,46 @@ test('project: invited and removed members', () => {
 });
 
 test('project: unrelated updates are silent', () => {
-  const p = { name: 'Home', memberEmails: ['bob@x.com'] };
-  assert.equal(ev.projectUpdateEvents({ projectId: 'p1', before: p, after: { ...p, name: 'Our home' } }).length, 0);
+  const p = { name: 'Home', description: 'Chores', memberEmails: ['bob@x.com'] };
+  assert.equal(ev.projectUpdateEvents({ projectId: 'p1', before: p, after: { ...p, colorHex: '#000000' } }).length, 0);
+  // Not shared with anybody: nobody to tell.
+  const mine = { name: 'Mine', memberEmails: [] };
+  assert.equal(ev.projectUpdateEvents({ projectId: 'p1', before: mine, after: { ...mine, name: 'Still mine' } }).length, 0);
+});
+
+test('project edited: the description is quoted only when it changed', () => {
+  const p = { name: 'Home', description: 'Chores', ownerEmail: 'anna@x.com', memberEmails: ['bob@x.com'] };
+  const edit = (over) => ev.projectUpdateEvents({
+    projectId: 'p1', before: p, after: { ...p, lastUpdatedBy: 'bob@x.com', lastUpdatedByDevice: 'dev-bob', ...over },
+  });
+
+  let out = edit({ name: 'Our home' });
+  assert.deepEqual(out.map((e) => e.title), ['Project edited']);
+  assert.equal(out[0].text, "{who} edited 'Our home'");
+  assert.equal(out[0].key, 'project:p1');
+  assert.equal(out[0].actorEmail, 'bob@x.com');
+  assert.equal(out[0].actorDevice, 'dev-bob');
+  assert.equal(out[0].only, undefined);
+
+  out = edit({ description: 'Chores\nand  repairs' });
+  assert.equal(out[0].text, "{who} edited 'Home', Chores and repairs");
+
+  out = edit({ description: '' });
+  assert.equal(out[0].text, "{who} edited 'Home'");
+});
+
+test('task edited: the description is quoted only when it changed', () => {
+  const base = list({ t1: task({ notes: 'Two litres' }) });
+  const edit = (over) => ev.listEvents({
+    listId: 'l1', before: base, after: list({ t1: task({ notes: 'Two litres', ...over }) }), project: {},
+  });
+
+  assert.equal(edit({ title: 'Oat milk' })[0].text, "{who} edited 'Oat milk'");
+  assert.equal(edit({ notes: 'Three litres,\nlactose free' })[0].text, "{who} edited 'Milk', Three litres, lactose free");
+  assert.equal(edit({ notes: '' })[0].text, "{who} edited 'Milk'");
+
+  const long = edit({ notes: 'x'.repeat(300) })[0].text;
+  assert.equal(long, `{who} edited 'Milk', ${'x'.repeat(120)}…`);
 });
 
 test('project deleted: only shared projects are announced', () => {

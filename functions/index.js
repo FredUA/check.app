@@ -136,7 +136,7 @@ exports.onListWritten = onDocumentWritten(
   }
 );
 
-/** A project changed: somebody was invited to it or removed from it. */
+/** A project changed: it was renamed, its description was edited, or somebody was invited to it or removed from it. */
 exports.onProjectUpdated = onDocumentUpdated(
   { ...OPTIONS, document: 'projects/{projectId}' },
   async (event) => {

@@ -31,6 +31,9 @@ private const val TAG = "CheckAppViewModel"
 // A list not seen before counts as "just created" if it was created within this long (server time).
 private const val NEW_LIST_WINDOW_MS = 120_000L
 
+// A task description quoted in an "edited" notification is cut to this many characters.
+private const val MAX_NOTIFICATION_DESCRIPTION = 120
+
 // How long list deletions are held back, to tell "project deleted" from "lists deleted one by one".
 private const val LIST_DELETION_SETTLE_MS = 2_000L
 
@@ -127,7 +130,13 @@ class CheckAppViewModel(
 
     private enum class TaskChangeKind { ADDED, EDITED, DELETED, COMPLETED, REOPENED }
 
-    private class TaskChange(val kind: TaskChangeKind, val task: TaskItem, val byEmail: String)
+    private class TaskChange(
+        val kind: TaskChangeKind,
+        val task: TaskItem,
+        val byEmail: String,
+        // For EDITED: the new description, when it is what changed (blank otherwise).
+        val description: String = ""
+    )
 
     // Fired when a task was marked completed by another device / collaborator, so the UI can play the sound.
     private val _remoteTaskCompleted = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
@@ -154,6 +163,12 @@ class CheckAppViewModel(
             !list.hasPendingWrites &&
             !previousList.fromCache &&
             list.projectId in sharedProjectIds
+
+    /** A description as quoted in a notification: on one line (line breaks collapsed) and cut if long. */
+    private fun descriptionForNotification(text: String): String =
+        text.trim().replace(Regex("\\s+"), " ").let {
+            if (it.length > MAX_NOTIFICATION_DESCRIPTION) it.take(MAX_NOTIFICATION_DESCRIPTION).trimEnd() + "…" else it
+        }
 
     /** Compares the new snapshot of all lists with the previous one and announces others' task changes. */
     private fun announceRemoteTaskChanges(lists: List<TaskList>) {
@@ -187,10 +202,10 @@ class CheckAppViewModel(
                     val kind = if (now.task.isCompleted) TaskChangeKind.COMPLETED else TaskChangeKind.REOPENED
                     changes.add(TaskChange(kind, now.task, by))
                 }
-                if (before.task.title.trim() != now.task.title.trim() ||
-                    before.task.notes.trim() != now.task.notes.trim()
-                ) {
-                    changes.add(TaskChange(TaskChangeKind.EDITED, now.task, by))
+                val notesChanged = before.task.notes.trim() != now.task.notes.trim()
+                if (before.task.title.trim() != now.task.title.trim() || notesChanged) {
+                    val description = if (notesChanged) descriptionForNotification(now.task.notes) else ""
+                    changes.add(TaskChange(TaskChangeKind.EDITED, now.task, by, description))
                 }
             }
         }
@@ -214,7 +229,7 @@ class CheckAppViewModel(
                 val title = change.task.title
                 val (banner, trayTitle, trayText) = when (change.kind) {
                     TaskChangeKind.COMPLETED -> Triple(
-                        "✓ $who completed: '$title'", "Task completed", "$who completed '$title'"
+                        "✓ $who marked done: '$title'", "Task done", "$who marked done '$title'"
                     )
                     TaskChangeKind.REOPENED -> Triple(
                         "$who reopened: '$title'", "Task reopened", "$who reopened '$title'"
@@ -222,9 +237,12 @@ class CheckAppViewModel(
                     TaskChangeKind.ADDED -> Triple(
                         "$who added task: '$title'", "Task added", "$who added '$title'"
                     )
-                    TaskChangeKind.EDITED -> Triple(
-                        "$who edited task: '$title'", "Task edited", "$who edited '$title'"
-                    )
+                    TaskChangeKind.EDITED -> {
+                        val suffix = if (change.description.isBlank()) "" else ", ${change.description}"
+                        Triple(
+                            "$who edited task: '$title'$suffix", "Task edited", "$who edited '$title'$suffix"
+                        )
+                    }
                     TaskChangeKind.DELETED -> Triple(
                         "$who deleted task: '$title'", "Task deleted", "$who deleted '$title'"
                     )
@@ -342,6 +360,7 @@ class CheckAppViewModel(
         // First snapshot is only the baseline. Demo mode edits are all local.
         if (previous == null || com.example.demo.DemoMode.isDemoActive.value) return
         val myUid = repository.currentUserId()
+        announceEditedProjects(previous, current, myUid)
         val gone = previous.values.filter { before ->
             before.id !in current &&
                 !before.fromCache &&
@@ -365,6 +384,33 @@ class CheckAppViewModel(
                     }
                 )
             }
+        }
+    }
+
+    /** Somebody else renamed a shared project or edited its description. */
+    private fun announceEditedProjects(previous: Map<String, Project>, current: Map<String, Project>, myUid: String?) {
+        val announcements = mutableListOf<Announcement>()
+        for ((id, project) in current) {
+            val before = previous[id] ?: continue
+            // Stale cache catching up with the server: not something that just happened.
+            if (before.fromCache) continue
+            // Edited on this device (the project records the device that last wrote it).
+            if (project.lastUpdatedByDevice == com.example.data.DeviceIdentity.id) continue
+            if (project.ownerId == myUid && project.memberEmails.isEmpty()) continue
+            val descriptionChanged = before.description.trim() != project.description.trim()
+            if (before.displayTitle.trim() == project.displayTitle.trim() && !descriptionChanged) continue
+            val title = project.displayTitle.ifBlank { "Untitled project" }
+            val description = if (descriptionChanged) descriptionForNotification(project.description) else ""
+            val suffix = if (description.isBlank()) "" else ", $description"
+            announcements.add(
+                Announcement(
+                    "project:$id", project.lastUpdatedBy.ifBlank { project.ownerEmail },
+                    "{who} edited project: '$title'$suffix", "Project edited", "{who} edited '$title'$suffix"
+                )
+            )
+        }
+        if (announcements.isNotEmpty()) {
+            viewModelScope.launch { announcements.forEach { deliver(it) } }
         }
     }
 
@@ -601,8 +647,8 @@ class CheckAppViewModel(
                 val currentEmail = repository.currentUserEmail()
                 val collaborators = task.memberEmails.filter { it.isNotBlank() && !it.equals(currentEmail, ignoreCase = true) }
                 val msg = if (nowCompleted) {
-                    if (collaborators.isNotEmpty()) "✓ Completed shared task: '${task.title}'"
-                    else "✓ Completed: '${task.title}'"
+                    if (collaborators.isNotEmpty()) "✓ Done shared task: '${task.title}'"
+                    else "✓ Done: '${task.title}'"
                 } else {
                     "Reopened task: '${task.title}'"
                 }
