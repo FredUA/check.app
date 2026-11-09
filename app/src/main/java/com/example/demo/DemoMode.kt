@@ -21,8 +21,9 @@ import java.util.UUID
  */
 object DemoMode {
 
-    // Global toggle switch for development
-    const val IS_DEMO_AVAILABLE = true
+    // Global toggle switch. Off for now: the sign-in screen hides the Demo Mode button.
+    // Set to true to bring it back; all the demo code is kept.
+    const val IS_DEMO_AVAILABLE = false
 
     // State of whether the user is currently inside Demo Mode
     val isDemoActive = MutableStateFlow(false)
