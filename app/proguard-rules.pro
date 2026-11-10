@@ -28,6 +28,13 @@
 -keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
 -keep class com.example.data.model.** { *; }
 
+# Home-screen widget: with R8 on, Glance never started its update sessions (provideGlance was never
+# called and the widget stayed on the white loading spinner). Keep Glance and the WorkManager it runs on
+# as they are.
+-keep class androidx.glance.** { *; }
+-keep class androidx.work.** { *; }
+-dontwarn androidx.glance.**
+
 # Home-screen widget: Glance creates the classes behind actionRunCallback<...>() by name.
 -keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }
 
