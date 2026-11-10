@@ -117,8 +117,12 @@ class MainActivity : ComponentActivity() {
                         val user = currentUser
                         val profile = if (isDemoActive) com.example.demo.DemoMode.demoProfile else (authState as? AuthUiState.Authenticated)?.profile
                         val userEmail = if (isDemoActive) com.example.demo.DemoMode.demoProfile.email else user?.email.orEmpty()
+                        val appContext = LocalContext.current.applicationContext
                         val checkAppViewModel = remember(user?.uid ?: "demo_session") {
-                            CheckAppViewModel(repository)
+                            // Demo data is throw-away, so its open list isn't remembered.
+                            val viewState = user?.uid?.takeUnless { isDemoActive }
+                                ?.let { com.example.data.ViewStateStore(appContext, it) }
+                            CheckAppViewModel(repository, viewState)
                         }
 
                         AppMainContent(

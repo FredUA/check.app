@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.CheckAppRepository
+import com.example.data.ViewStateStore
 import com.example.data.model.Project
 import com.example.data.model.TaskItem
 import com.example.data.model.TaskList
@@ -62,7 +63,8 @@ data class RemoteEvent(
 )
 
 class CheckAppViewModel(
-    private val repository: CheckAppRepository
+    private val repository: CheckAppRepository,
+    private val viewState: ViewStateStore? = null
 ) : ViewModel() {
 
     val projects: StateFlow<List<Project>> = repository.observeProjects()
@@ -88,6 +90,48 @@ class CheckAppViewModel(
 
     private val _selectedListId = MutableStateFlow<String?>(null)
     val selectedListId: StateFlow<String?> = _selectedListId.asStateFlow()
+
+    // Selection is written to disk only after the saved one has been restored (or dropped),
+    // otherwise the empty startup state would overwrite it.
+    private var selectionRestored = false
+
+    init {
+        val store = viewState
+        if (store == null) {
+            selectionRestored = true
+        } else {
+            viewModelScope.launch {
+                combine(_selectedProjectId, _selectedListId) { p, l -> p to l }.collect { (p, l) ->
+                    if (selectionRestored) store.saveSelection(p, l)
+                }
+            }
+            viewModelScope.launch { restoreSelection(store) }
+        }
+    }
+
+    /** Re-opens the project/list from last time, but only if they still exist and are accessible. */
+    private suspend fun restoreSelection(store: ViewStateStore) {
+        val saved = store.selection()
+        val projectId = saved.projectId
+        if (projectId != null) {
+            val projectFound = kotlinx.coroutines.withTimeoutOrNull(8_000) {
+                repository.observeAccessibleProjects().first { list -> list.any { it.id == projectId } }
+            } != null
+            // The user already picked something while we were waiting: theirs wins.
+            if (projectFound && _selectedProjectId.value == null && _selectedListId.value == null) {
+                _selectedProjectId.value = projectId
+                val listId = saved.listId
+                if (listId != null) {
+                    val listFound = kotlinx.coroutines.withTimeoutOrNull(5_000) {
+                        allLists.first { lists -> lists.any { it.id == listId && it.projectId == projectId } }
+                    } != null
+                    if (listFound && _selectedListId.value == null) _selectedListId.value = listId
+                }
+            }
+        }
+        selectionRestored = true
+        store.saveSelection(_selectedProjectId.value, _selectedListId.value)
+    }
 
     private val _sortOption = MutableStateFlow(SortOption.DATE_OLDEST)
     val sortOption: StateFlow<SortOption> = _sortOption.asStateFlow()
