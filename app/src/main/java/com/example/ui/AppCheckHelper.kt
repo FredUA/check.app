@@ -21,7 +21,9 @@ fun configureAppCheck(context: Context, intent: Intent?) {
             FirebaseApp.initializeApp(context)
         }
 
-        if (BuildConfig.DEBUG) {
+        // The "optimized" build type is not a debug build, but is installed the same way (sideloaded,
+        // debug-signed), so it keeps the debug provider and the token already stored on the phone.
+        if (BuildConfig.DEBUG || BuildConfig.DEBUG_APP_CHECK) {
             val debugToken = intent?.getStringExtra(DEBUG_TOKEN_EXTRA)
             if (!debugToken.isNullOrEmpty()) {
                 val persistenceKey = FirebaseApp.getInstance().persistenceKey

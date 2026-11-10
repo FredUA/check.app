@@ -19,3 +19,19 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# --- Rules for builds with R8 switched on (the "optimized" build type) ---
+
+# Firestore fills these classes by reflection (DocumentSnapshot.toObject): it matches document fields to
+# getters and backing fields by name, needs the no-argument constructor, and reads the Firestore
+# annotations and the generic types of List/Map properties.
+-keepattributes Signature,*Annotation*,InnerClasses,EnclosingMethod
+-keep class com.example.data.model.** { *; }
+
+# Home-screen widget: Glance creates the classes behind actionRunCallback<...>() by name.
+-keep class * implements androidx.glance.appwidget.action.ActionCallback { <init>(); }
+
+# Sign in with Google through Credential Manager: the Play services provider is looked up by name
+# (rule from the Credential Manager documentation).
+-if class androidx.credentials.CredentialManager
+-keep class androidx.credentials.playservices.** { *; }

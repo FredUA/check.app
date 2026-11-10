@@ -21,6 +21,9 @@ android {
     versionName = "1.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    // App Check uses the debug provider in debug builds anyway; a build type can ask for it too.
+    buildConfigField("boolean", "DEBUG_APP_CHECK", "false")
   }
 
   // "release" reads the upload keystore from the environment (KEYSTORE_PATH, STORE_PASSWORD,
@@ -50,6 +53,17 @@ android {
     }
     debug {
       signingConfig = signingConfigs.getByName("debugConfig")
+    }
+    // The build to actually use on a phone (:app:installOptimized). It is signed like "debug", so it
+    // installs over a debug build and keeps the app's data, and it talks to Firebase the same way. But it
+    // is not debuggable and is optimised by R8: a debug build of a Compose app scrolls noticeably worse,
+    // and Android never compiles a debuggable app ahead of time.
+    create("optimized") {
+      initWith(getByName("release"))
+      signingConfig = signingConfigs.getByName("debugConfig")
+      isMinifyEnabled = true
+      matchingFallbacks += "release"
+      buildConfigField("boolean", "DEBUG_APP_CHECK", "true")
     }
   }
   compileOptions {
