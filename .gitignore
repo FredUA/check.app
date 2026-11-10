@@ -1,21 +1,38 @@
-*.iml
-.gradle
-.kotlin
-/local.properties
-# Android Studio / IntelliJ project settings (machine-specific)
-.idea/
-.DS_Store
+# Build output and caches
 /build
 /captures
+.gradle
+.kotlin
 .externalNativeBuild
 .cxx
+*.apk
+*.aab
+
+# IDE and OS files (machine-specific)
+*.iml
+.idea/
+.DS_Store
 local.properties
+
+# Secrets and signing material - never commit these
 .env
+.env.*
+!.env.example
 debug.keystore
-*-debug.log
 *.jks
 *.keystore
+*.p12
+*.pem
+keystore.properties
+service-account*.json
+*-firebase-adminsdk-*.json
+functions/.runtimeconfig.json
 
-functions/node_modules/
-firebase-debug.log
+# Firebase client config: download it from the Firebase console (template: app/google-services.json.example)
+app/google-services.json
+
+# Firebase and Node
 .firebase/
+firebase-debug.log
+*-debug.log
+node_modules/
