@@ -1,7 +1,9 @@
 package com.example.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.keyframes
@@ -80,6 +82,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -154,6 +159,22 @@ fun HomeScreen(
 
     var speedDialOpen by remember { mutableStateOf(false) }
     var showSearch by remember { mutableStateOf(false) }
+    val searchFocusRequester = remember { FocusRequester() }
+    var isSearchFocused by remember { mutableStateOf(false) }
+    // Bumped on every tap that should put the cursor in the search field.
+    var searchFocusRequests by remember { mutableStateOf(0) }
+    LaunchedEffect(searchFocusRequests) {
+        if (searchFocusRequests > 0) {
+            // The field appears with an animation: give it a frame to be laid out.
+            delay(50)
+            try { searchFocusRequester.requestFocus() } catch (_: Exception) { }
+        }
+    }
+    LaunchedEffect(showSearch) {
+        if (!showSearch) isSearchFocused = false
+    }
+    // While there's a search text, only the search field and the matching tasks are shown.
+    val isSearching = searchQuery.isNotBlank()
     var showSortMenu by remember { mutableStateOf(false) }
     var showNotificationsPopover by remember { mutableStateOf(false) }
 
@@ -334,7 +355,17 @@ fun HomeScreen(
                 // Right icons: Search & Notifications
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = { showSearch = !showSearch },
+                        onClick = {
+                            // Open (focused or not) -> close. Closed -> open and focus right away.
+                            if (showSearch) {
+                                // The page is reduced to the results while searching, so closing the field ends the search.
+                                viewModel.setSearchQuery("")
+                                showSearch = false
+                            } else {
+                                showSearch = true
+                                searchFocusRequests++
+                            }
+                        },
                         modifier = Modifier.testTag("search_toggle_button")
                     ) {
                         Icon(
@@ -393,7 +424,7 @@ fun HomeScreen(
                 if (selectedListId != lastListIdForTaskAdd) {
                     lastListIdForTaskAdd = selectedListId
                     previousTaskCount = filteredTasks.size
-                } else if (filteredTasks.size > previousTaskCount && isInputActive) {
+                } else if (filteredTasks.size > previousTaskCount && isInputActive && !showSearch) {
                     previousTaskCount = filteredTasks.size
                     delay(50)
                     val bottomIndex = 5 + filteredTasks.size
@@ -403,7 +434,15 @@ fun HomeScreen(
                 }
             }
 
+            // The page shrinks to the results (or grows back) when a search starts or ends: start from the top
+            // so the header slides in/out from there instead of the list landing somewhere in the middle.
+            LaunchedEffect(isSearching) {
+                taskListState.scrollToItem(0)
+            }
+
             LaunchedEffect(isInputActive, isImeOpen) {
+                // Typing in the search field must not move the page: the keyboard just overlaps it.
+                if (isSearchFocused) return@LaunchedEffect
                 if (isInputActive) {
                     val bottomIndex = if (filteredTasks.isEmpty()) 6 else (5 + filteredTasks.size)
                     delay(50)
@@ -494,23 +533,32 @@ fun HomeScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(bottom = 12.dp)
+                                    .focusRequester(searchFocusRequester)
+                                    .onFocusChanged { isSearchFocused = it.isFocused }
                                     .testTag("search_text_input")
                             )
                         }
 
-                        // Greeting Header
-                        Text(
-                            text = "What's up, $firstName!",
-                            color = TextPrimary,
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = (-0.5).sp,
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        )
                     }
                 }
 
-                item(key = "projects_section") {
+                // Everything between the search field and the tasks. Slides away while searching.
+                item(key = "top_blocks") {
+                  AnimatedVisibility(
+                    visible = !isSearching,
+                    enter = expandVertically() + fadeIn(),
+                    exit = shrinkVertically() + fadeOut()
+                  ) {
+                   Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Greeting Header
+                    Text(
+                        text = "What's up, $firstName!",
+                        color = TextPrimary,
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = (-0.5).sp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                     Column {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -569,9 +617,7 @@ fun HomeScreen(
                             }
                         }
                     }
-                }
 
-                item(key = "lists_section") {
                     Column {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -706,9 +752,7 @@ fun HomeScreen(
                             )
                         }
                     }
-                }
 
-                item(key = "todays_tasks_header") {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -756,6 +800,8 @@ fun HomeScreen(
                             }
                         }
                     }
+                   }
+                  }
                 }
                 if (filteredTasks.isEmpty()) {
                     item {
@@ -774,20 +820,29 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.Center,
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Text(
-                                    text = if (selectedListId != null) "No tasks in this list yet" else "All Lists view",
-                                    color = TextPrimary,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = if (selectedListId != null) "Type below to quickly add a task to this list"
-                                           else "Select a specific list above to quickly add tasks to it",
-                                    color = TextSecondary,
-                                    fontSize = 12.sp,
-                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                                )
+                                if (isSearching) {
+                                    Text(
+                                        text = "Nothing found",
+                                        color = TextPrimary,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                } else {
+                                    Text(
+                                        text = if (selectedListId != null) "No tasks in this list yet" else "All Lists view",
+                                        color = TextPrimary,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = if (selectedListId != null) "Type below to quickly add a task to this list"
+                                               else "Select a specific list above to quickly add tasks to it",
+                                        color = TextSecondary,
+                                        fontSize = 12.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
