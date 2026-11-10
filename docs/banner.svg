@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 420" width="1280" height="420" role="img" aria-labelledby="title desc">
+  <title id="title">check.app</title>
+  <desc id="desc">The neon check mark of check.app next to a project card with two lists whose tasks tick off one by one.</desc>
+  <defs>
+    <radialGradient id="bg" cx="20%" cy="35%" r="100%">
+      <stop offset="0" stop-color="#3A57BE"/>
+      <stop offset="0.5" stop-color="#283E7A"/>
+      <stop offset="1" stop-color="#0E1844"/>
+    </radialGradient>
+    <radialGradient id="warm" cx="92%" cy="105%" r="60%">
+      <stop offset="0" stop-color="#FF2A85" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#FF2A85" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#00D2FF" stop-opacity="0.35"/>
+      <stop offset="0.55" stop-color="#7B5CFF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#FF2A85" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="neon" gradientUnits="userSpaceOnUse" x1="32" y1="72" x2="78" y2="36">
+      <stop offset="0" stop-color="#00D2FF"/>
+      <stop offset="1" stop-color="#FF2A85"/>
+    </linearGradient>
+    <linearGradient id="tick" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#00D2FF"/>
+      <stop offset="1" stop-color="#FF2A85"/>
+    </linearGradient>
+    <pattern id="dots" width="32" height="32" patternUnits="userSpaceOnUse">
+      <circle cx="3" cy="3" r="1.5" fill="#FFFFFF" fill-opacity="0.07"/>
+    </pattern>
+    <clipPath id="frame"><rect width="1280" height="420" rx="28"/></clipPath>
+  </defs>
+
+  <style>
+    .t { font-family: 'Segoe UI', 'SF Pro Display', 'Helvetica Neue', Roboto, Arial, sans-serif; }
+    /* Resting state = everything visible. The animations only play on top of it. */
+    .draw { stroke-dasharray: 100 200; stroke-dashoffset: 0; animation: draw 7s ease-in-out infinite; }
+    .halo { transform-box: fill-box; transform-origin: center; animation: pulse 5s ease-in-out infinite; }
+    .float { animation: float 8s ease-in-out infinite; }
+    .tick-fill { animation: fill 8s ease-in-out infinite both; }
+    .tick-mark { stroke-dasharray: 100 200; stroke-dashoffset: 0; animation: mark 8s ease-in-out infinite both; }
+    @keyframes draw { 0% { stroke-dashoffset: 101; opacity: 1 } 14%, 86% { stroke-dashoffset: 0; opacity: 1 } 100% { stroke-dashoffset: 0; opacity: 0 } }
+    @keyframes pulse { 0%, 100% { opacity: .6; transform: scale(1) } 50% { opacity: 1; transform: scale(1.08) } }
+    @keyframes float { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+    @keyframes fill { 0%, 6% { opacity: 0 } 12%, 90% { opacity: 1 } 97%, 100% { opacity: 0 } }
+    @keyframes mark { 0%, 8% { stroke-dashoffset: 101 } 15%, 90% { stroke-dashoffset: 0 } 97%, 100% { stroke-dashoffset: 101 } }
+    @media (prefers-reduced-motion: reduce) { * { animation: none !important } }
+  </style>
+
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="420" fill="url(#bg)"/>
+    <rect width="1280" height="420" fill="url(#warm)"/>
+    <rect width="1280" height="420" fill="url(#dots)"/>
+
+    <!-- a few faint checks drifting in the background -->
+    <g class="float" opacity=".16"><path transform="translate(596 70)" d="M0,0 L10,10 L28,-10" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g class="float" opacity=".12" style="animation-delay:-3s"><path transform="translate(690 350) scale(1.4)" d="M0,0 L10,10 L28,-10" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <g class="float" opacity=".14" style="animation-delay:-5s"><path transform="translate(60 52) scale(.8)" d="M0,0 L10,10 L28,-10" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></g>
+
+    <!-- logo: the app's neon check, drawn in four layers -->
+    <circle class="halo" cx="205" cy="222" r="200" fill="url(#halo)"/>
+    <g transform="translate(7 26) scale(3.6)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path class="draw" pathLength="100" d="M34,56 L48,70 L76,38" stroke="url(#neon)" stroke-width="22" stroke-opacity=".14"/>
+      <path class="draw" pathLength="100" d="M34,56 L48,70 L76,38" stroke="url(#neon)" stroke-width="16" stroke-opacity=".28"/>
+      <path class="draw" pathLength="100" d="M34,56 L48,70 L76,38" stroke="url(#neon)" stroke-width="10"/>
+      <path class="draw" pathLength="100" d="M34,56 L48,70 L76,38" stroke="#FFFFFF" stroke-width="3" stroke-opacity=".85"/>
+    </g>
+
+    <!-- words -->
+    <text class="t" x="352" y="215" font-size="82" font-weight="800" fill="#FFFFFF" letter-spacing="-1.5">check.app</text>
+    <text class="t" x="354" y="266" font-size="32" font-weight="600" fill="#A6BAE8">Projects <tspan fill="#00D2FF">→</tspan> Lists <tspan fill="#FF2A85">→</tspan> Tasks</text>
+    <text class="t" x="354" y="308" font-size="24" fill="#7E93CA">Plan together. Tick it off. Stay in sync.</text>
+
+    <!-- a project holding two lists; their tasks tick off one after another -->
+    <g transform="translate(820 80)">
+      <rect y="12" width="400" height="260" rx="28" fill="#0A1230" opacity=".35"/>
+      <rect width="400" height="260" rx="28" fill="#1D2C5E" stroke="#384E96" stroke-width="2"/>
+      <rect x="26" y="24" width="132" height="14" rx="7" fill="#FF2A85"/>
+      <circle cx="362" cy="31" r="10" fill="#A6BAE8" fill-opacity=".85"/>
+      <circle cx="378" cy="31" r="10" fill="#8A8F98" stroke="#1D2C5E" stroke-width="2"/>
+
+      <g transform="translate(26 62)">
+        <rect width="167" height="172" rx="20" fill="#273A78" stroke="#384E96" stroke-width="2"/>
+        <rect x="18" y="18" width="84" height="10" rx="5" fill="#00D2FF"/>
+        <g>
+          <circle cx="34" cy="58" r="12" fill="none" stroke="#00D2FF" stroke-width="2.5"/>
+          <circle class="tick-fill" style="animation-delay:.8s" cx="34" cy="58" r="12" fill="url(#tick)"/>
+          <path class="tick-mark" style="animation-delay:.8s" pathLength="100" d="M28,58 L33,63 L41,53" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="56" y="53.5" width="90" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+        <g>
+          <circle cx="34" cy="98" r="12" fill="none" stroke="#00D2FF" stroke-width="2.5"/>
+          <circle class="tick-fill" style="animation-delay:2.4s" cx="34" cy="98" r="12" fill="url(#tick)"/>
+          <path class="tick-mark" style="animation-delay:2.4s" pathLength="100" d="M28,98 L33,103 L41,93" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="56" y="93.5" width="68" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+        <g>
+          <circle cx="34" cy="138" r="12" fill="none" stroke="#FF2A85" stroke-width="2.5"/>
+          <rect x="56" y="133.5" width="82" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+      </g>
+
+      <g transform="translate(207 62)">
+        <rect width="167" height="172" rx="20" fill="#273A78" stroke="#384E96" stroke-width="2"/>
+        <rect x="18" y="18" width="70" height="10" rx="5" fill="#9D4EDD"/>
+        <g>
+          <circle cx="34" cy="58" r="12" fill="none" stroke="#9D4EDD" stroke-width="2.5"/>
+          <circle class="tick-fill" style="animation-delay:1.6s" cx="34" cy="58" r="12" fill="url(#tick)"/>
+          <path class="tick-mark" style="animation-delay:1.6s" pathLength="100" d="M28,58 L33,63 L41,53" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="56" y="53.5" width="78" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+        <g>
+          <circle cx="34" cy="98" r="12" fill="none" stroke="#9D4EDD" stroke-width="2.5"/>
+          <circle class="tick-fill" style="animation-delay:3.2s" cx="34" cy="98" r="12" fill="url(#tick)"/>
+          <path class="tick-mark" style="animation-delay:3.2s" pathLength="100" d="M28,98 L33,103 L41,93" fill="none" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="56" y="93.5" width="86" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+        <g>
+          <circle cx="34" cy="138" r="12" fill="none" stroke="#00D2FF" stroke-width="2.5"/>
+          <rect x="56" y="133.5" width="62" height="9" rx="4.5" fill="#A6BAE8" fill-opacity=".55"/>
+        </g>
+      </g>
+    </g>
+  </g>
+</svg>
